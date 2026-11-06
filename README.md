@@ -16,7 +16,7 @@ Unlock RuneScape's interface to move or resize it; settings and layout persist.
 2. Download a ZIP from [Releases](https://github.com/fletchto99/VoragoSync/releases)
    and extract it into your beta cache's `dev_plugins\voragosync` folder.
    See the [installation guide](docs/guide.md#developer-beta-setup) for exact
-   Windows commands, source installs, and migration from VoragoTag.
+   Windows commands and source installs.
 3. Open the beta console with **Alt + the key below Esc**, then enable it:
 
    ```text
@@ -57,7 +57,7 @@ npm run check
 
 ## License
 
-VoragoSync is [MIT licensed](LICENSE), extracted from the native VoragoTag
-prototype. [PrettyUI](https://github.com/PrettyRS/prettyui) is a separately
+VoragoSync is [MIT licensed](LICENSE).
+[PrettyUI](https://github.com/PrettyRS/prettyui) is a separately
 installed [BSD-3-Clause](https://github.com/PrettyRS/prettyui/blob/main/LICENSE)
 dependency; none of its implementation or resources are vendored here.

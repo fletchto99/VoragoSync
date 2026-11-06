@@ -40,15 +40,7 @@ Node.js, tests, and a build step are not required to load the plugin. If your ca
 elsewhere, use the client loading-screen cog to locate the beta cache with
 `.jcache` files. Nothing in this repository installs game files automatically.
 
-If migrating from the old `voragotag` developer plugin, **disable it before
-enabling VoragoSync** to avoid duplicate timers:
-
-```text
-poff voragotag
-```
-
-Leave the old folder intact. The new identity can start with fresh preference
-defaults; no settings migration is required. Refresh the manifest and activate:
+Refresh the manifest and activate:
 
 ```text
 prf
@@ -211,8 +203,7 @@ Placement coverage includes native interface-lock changes and unavailable
 signals, click-through, drag/resize capture, all eight resize directions, saved
 geometry, responsive bars, reset behavior, viewport clamping, and storage failures.
 Default timing is compared at thousands of boundaries against a small,
-attributed [test-only reference](https://github.com/fletchto99/VoragoSync/blob/main/tests/reference/timer.ts)
-from VoragoTag.
+attributed [test-only reference](https://github.com/fletchto99/VoragoSync/blob/main/tests/reference/timer.ts).
 
 ### Releases
 
@@ -272,8 +263,8 @@ Attestations establish artifact origin and integrity, not in-game correctness.
 
 ## License and dependencies
 
-VoragoSync is [MIT licensed](../LICENSE), extracted from the native VoragoTag
-prototype. [PrettyUI](https://github.com/PrettyRS/prettyui) is a separately
+VoragoSync is [MIT licensed](../LICENSE).
+[PrettyUI](https://github.com/PrettyRS/prettyui) is a separately
 installed external dependency licensed under
 [BSD-3-Clause](https://github.com/PrettyRS/prettyui/blob/main/LICENSE);
 none of its implementation or resources are vendored here.
