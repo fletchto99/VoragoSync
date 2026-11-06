@@ -4,18 +4,18 @@ local function integer(value)
     return type(value) == "number" and value > -math.huge and value < math.huge and value % 1 == 0
 end
 
-local function npcIDs(pattern, matches)
-    local ok, npcs = pcall(NPCList.ByName, pattern)
-    if not ok then return nil, "NPC lookup failed: " .. pattern, tostring(npcs) end
-    if type(npcs) ~= "table" then return nil, "NPC list unavailable: " .. pattern end
+local function voragoIDs()
+    local ok, npcs = pcall(NPCList.ByName, "Vorago")
+    if not ok then return nil, "NPC lookup failed: Vorago", tostring(npcs) end
+    if type(npcs) ~= "table" then return nil, "NPC list unavailable: Vorago" end
     local seen, ids = {}, {}
     for _, npc in ipairs(npcs) do
-        if type(npc.isValid) ~= "boolean" then return nil, "NPC validity unavailable: " .. pattern end
+        if type(npc.isValid) ~= "boolean" then return nil, "NPC validity unavailable: Vorago" end
         if npc.isValid then
-            if type(npc.displayName) ~= "string" then return nil, "NPC name unavailable: " .. pattern end
-            if matches(npc.displayName:lower()) then
+            if type(npc.displayName) ~= "string" then return nil, "NPC name unavailable: Vorago" end
+            if npc.displayName:lower() == "vorago" then
                 local uid = npc.uid
-                if not integer(uid) then return nil, "NPC UID unavailable: " .. pattern end
+                if not integer(uid) then return nil, "NPC UID unavailable: Vorago" end
                 if not seen[uid] then
                     seen[uid] = true
                     ids[#ids + 1] = uid
@@ -33,14 +33,14 @@ local function failure(result, status, detail)
 end
 
 function Encounter.read()
-    local result = { valid = false, error = false, voragoPresent = false, playerAlive = false }
-    local bosses, status, detail = npcIDs("Vorago", function(name) return name == "vorago" end)
+    local result = { valid = false, error = false }
+    local bosses, status, detail = voragoIDs()
     if status then return failure(result, status, detail) end
     if #bosses == 0 then
         result.status = "Vorago not present - detection disarmed"
         return result
     end
-    result.voragoPresent, result.identity = true, table.concat(bosses, ",")
+    result.identity = table.concat(bosses, ",")
 
     local life = var and var.VarPlayer and var.VarPlayer.LIFEPOINTS
     if life == nil then return failure(result, "Own life points unavailable") end
@@ -54,13 +54,6 @@ function Encounter.read()
         result.status = "Own life points zero - detection disarmed"
         return result
     end
-    result.playerAlive = true
-
-    -- Encounter/death checks precede interpreting an empty Scopulus query.
-    local scops
-    scops, status, detail = npcIDs("*Scopul*", function(name) return name:find("scopul", 1, true) ~= nil end)
-    if status then return failure(result, status, detail) end
-    result.scopCount = #scops
     result.valid, result.status = true, "Vorago present; player alive"
     return result
 end

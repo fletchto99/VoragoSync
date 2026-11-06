@@ -57,6 +57,8 @@ local sample = Probe.read()
 assert(uiReads == 3 and valueReads == 4)
 assert(sample.valid and not sample.error)
 assert(sample.name == "Vorago" and sample.current == 250000 and sample.maximum == 250000)
+assert(sample.ui == nil, "unused UI diagnostic text must not be returned")
+assert(sample.uiIdentity == "container(type=20,visible=true)")
 current.current = 0
 assert(Probe.read().current == 0, "real zero must remain zero")
 allowValues(false)
@@ -77,6 +79,11 @@ sample = Probe.read()
 assert(sample.valid and sample.status == "Active activity - UI not fully exposed")
 components = { [76742679] = container, [76742671] = progress, [76742682] = label }
 local identity = Probe.read().uiIdentity
+progress.visibleGlobal = false
+sample = Probe.read()
+assert(sample.valid and sample.current == 0 and sample.uiIdentity == identity,
+    "optional fill visibility at zero must not invalidate the HP observation")
+progress.visibleGlobal = true
 label.visibleGlobal = false
 sample = Probe.read()
 assert(sample.valid and sample.uiIdentity == identity, "optional label visibility is not encounter identity")

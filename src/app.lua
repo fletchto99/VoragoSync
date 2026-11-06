@@ -56,11 +56,11 @@ function App.start()
         visibilityGraceRemaining, visibilityWasActive = 0, false
     end
 
-    local function startCountdown(reason)
+    local function startCountdown()
         if state.phase ~= "idle" then return end
         Detector.reset(detector)
         Timer.start(state)
-        print("[VoragoSync] " .. reason .. ": started 24-second countdown.")
+        print("[VoragoSync] Vorago positive HP -> 0: started 24-second countdown.")
     end
 
     local function monitor(deltaSeconds)
@@ -91,12 +91,8 @@ function App.start()
             encounterIdentity = latestEncounter.identity
         end
         local busy = state.phase ~= "idle"
-        local hpEdge = Detector.observe(detector, latestReading, busy, gap)
-        local scopEdge = Detector.observeScop(detector, latestEncounter, busy, gap)
-        if hpEdge or scopEdge then
-            local reason = hpEdge and "Vorago positive HP -> 0" or "Scopulus presence -> absence (heuristic)"
-            if hpEdge and scopEdge then reason = reason .. " + Scopulus absence" end
-            startCountdown(reason)
+        if Detector.observe(detector, latestReading, busy, gap) then
+            startCountdown()
         end
     end
 
@@ -228,9 +224,6 @@ function App.start()
     local function armedStatus()
         if state.phase ~= "idle" then return "Armed: no - countdown/hold active" end
         if latestEncounter and not latestEncounter.valid then return "Armed: no - " .. latestEncounter.status end
-        if detector.scop then
-            return "Armed: " .. (detector.positive and "HP + " or "") .. "Scopulus (" .. latestEncounter.scopCount .. " present)"
-        end
         if detector.positive then return "Armed: Vorago HP" end
         return "Armed: no - waiting for a fresh observation"
     end
