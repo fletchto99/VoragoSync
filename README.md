@@ -7,6 +7,8 @@ developer beta; no Alt1 application is needed.
 The compact overlay places the countdown **left of the bar on the same row**,
 with no heading, audio, or manual Start/Reset buttons. Its four sections are
 `pre-ult` (14.4s), `ult` (0.6s), `post-ult` (8.4s), and `tc` (0.6s).
+The window fits the visible rows. Debug mode expands below the timer, with
+an error row only when needed; normal mode stays a single compact row.
 
 ## Developer-beta setup
 
@@ -59,32 +61,66 @@ plugin with `poff voragosync`.
 Monitoring starts automatically. Open **Plugin Hub > Manage > VoragoSync >
 Settings** using the plugin's Settings icon.
 
-| Setting                   | Default | Effect                                                                     |
-| ------------------------- | ------- | -------------------------------------------------------------------------- |
-| Smooth countdown          | Off     | Use 0.1s steps throughout, rather than 0.6s long sections and 0.1s ult/tc. |
-| Remove bar sections       | Off     | Show a single gapless gold bar without segment labels; keep the countdown. |
-| Only show in Vorago arena | Off     | Show with a Vorago boss bar or active countdown, plus a 5s buffer.         |
-| Debug mode                | Off     | Dev builds only: show Activity, Current HP, and Armed state below the bar. |
+| Setting                   | Default | Effect                                                                                                   |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| Smooth countdown          | Off     | Use 0.1s steps throughout, rather than 0.6s long sections and 0.1s ult/tc.                               |
+| Remove bar sections       | Off     | Show a single gapless gold bar without segment labels; keep the countdown.                               |
+| Only show in Vorago arena | Off     | Show with positive Vorago HP or an active countdown; use a 5s hide buffer and 10s reappearance cooldown. |
+| Debug mode                | Off     | Dev builds only: show Activity, Current HP, and Armed state below the bar.                               |
 
 All settings persist and apply mid-countdown without resetting elapsed time.
 The uniform bar follows raw elapsed time independently of countdown snapping.
 Both bar styles hold full for one second at completion, then clear.
-Operational errors are logged even with Debug mode off and shown whenever
-the overlay is visible.
+Operational errors are always logged, but appear in the overlay only with
+Debug mode on. Settings-save failures also show a message in Settings.
 
 **Only show in Vorago arena** shows the overlay while a valid, active Vorago
-boss bar is detected or a countdown (including its full-bar hold) is active.
+boss bar has positive HP or a countdown (including its full-bar hold) is active.
+Zero-HP bar readings cannot reactivate an idle overlay after the fight.
 Once neither is active, it stays visible for **five more seconds** before
-fading out. Renewed activity restarts that buffer. Vorago's NPC presence is not
+fading out. While visible, renewed activity restarts that buffer. After it
+disappears, a **ten-second cooldown** blocks automatic reappearance and ignores
+transient HP-bar readings without queuing another appearance. A fresh sample
+is required after the cooldown. Losing the visible overlay during loading or
+a cutscene also starts this cooldown. Vorago's NPC presence is not
 required, so phase transitions do not hide an active timer, and the lobby
 NPC alone does not show it. Monitoring continues while hidden, and Settings
 remains accessible. This is an activity proxy, not an arena boundary check:
 teleporting out mid-countdown can leave the overlay visible until the timer,
-hold, buffer, and fade-out finish. Reloading or leaving active game state clears the buffer.
+hold, buffer, and fade-out finish. Reloading clears visibility history.
 The overlay fades in over **one second** whenever it first appears or returns from
 being hidden, and fades out over **one second** after the buffer. If activity returns
 during fade-out, it smoothly reverses from its current opacity. Fading does not
-delay the countdown.
+delay the countdown; the window frame, text, and bars fade together.
+
+To move the overlay, **unlock RuneScape's interface** using the game's normal
+interface-lock control; there is no separate plugin setting. A full-width brown
+drag bar, twelve units tall, appears **above the entire gold frame**, using RuneScape's move cursor.
+It adds no padding inside the timer and disappears completely when locked.
+Drag that handle
+to move the window, or drag any side or corner to resize it. There is no blue
+outline. The bars stretch horizontally and vertically to fill the resized
+timer area, with labels and the countdown centered vertically. Text stays
+the same size.
+The overlay stays visible and opaque while unlocked, even outside the arena.
+Position and resized dimensions are saved on release and restored on reload,
+with screen bounds and minimum readable dimensions enforced.
+While unlocked, space is reserved above the window to keep the drag bar
+accessible at the top of the screen; this does not overwrite its saved layout.
+
+Lock RuneScape's interface again to hide the handle and disable resizing,
+restoring click-through and normal arena visibility/fades. **Reset to defaults**
+in the plugin's Settings resets all display preferences, size, and position.
+Moving, resizing, and resetting settings never reset a countdown or change
+RuneScape's global interface-lock state.
+The overlay uses RuneScape's thin HUD-style frame, with four-unit borders
+and a matching brown editing header rather than the chunky modal-dialog frame.
+The default window is 500 by 48 interface units, with six-unit vertical padding.
+The countdown uses a compact 56-unit column, four units from the left edge of
+the content and six units from the bars. It can be resized down to 340 units wide; its minimum height fits
+the visible rows. Existing saved sizes are preserved, so unlock the interface
+to shrink an existing layout further. Editing mode and disabling arena-only
+visibility bypass the automatic reappearance cooldown.
 
 `src/build.lua` explicitly sets `isDevBuild = true`; this is **not automatic
 beta-client detection**. A non-dev build sets it to `false`, hides Debug mode,
@@ -164,10 +200,13 @@ version updates are grouped into one pull request per ecosystem; major updates
 get separate pull requests. See [the configuration](.github/dependabot.yml).
 The external PrettyUI plugin is managed manually, not by Dependabot.
 
-Tests cover guarded reads, HP triggers, lifecycle resets, all sixteen
-display-setting combinations, mid-run toggles, bar geometry, persistence and
+Tests cover guarded reads, HP triggers, lifecycle resets, display-setting
+combinations, mid-run toggles, bar geometry, persistence and
 error reporting, arena visibility, dev/non-dev settings, dependency failures, and wrapper
 cleanup. PrettyUI tests use a 1.2.0 contract double, not the game's renderer.
+Placement coverage includes native interface-lock changes and unavailable
+signals, click-through, drag/resize capture, all eight resize directions, saved
+geometry, responsive bars, reset behavior, viewport clamping, and storage failures.
 Default timing is compared at thousands of boundaries against a small,
 attributed [test-only reference](tests/reference/timer.ts) from VoragoTag.
 
