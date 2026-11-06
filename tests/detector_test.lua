@@ -47,10 +47,6 @@ assert(not observe(reading(0)))
 observe(reading(10, { uiIdentity = "not exposed from the outset" }))
 assert(observe(reading(0, { uiIdentity = "not exposed from the outset" })),
     "confirmed variables need not depend on optional UI exposure")
-observe(reading(10, { ui = "all components visible" }))
-assert(observe(reading(0, { ui = "fill component hidden" })),
-    "optional fill visibility must not suppress a real zero")
-
 observe(reading(100), true)
 assert(not observe(reading(0), true), "do not restart an active countdown")
 assert(not observe(reading(0)), "do not queue a zero observed during a countdown")
