@@ -1,4 +1,6 @@
 -- Contract double for the documented host APIs, not an in-game UI test.
+-- Exercise both build modes, including when testing the non-dev release archive.
+require("src/build").isDevBuild = true
 local components, subscriptions, messages = {}, {}, {}
 local nextID, queryCount, activityQueries = 0, 0, 0
 local rootAvailable, activityUIAvailable = false, true

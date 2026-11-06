@@ -325,11 +325,9 @@ function App.start()
         end
         view.parentWidth, view.parentHeight = parent.width, parent.height
         view.windowWidth, view.windowHeight = root.width, root.height
-        if lockChanged then
-            if not view.locked then
-                view.dragHandle:MoveToFront()
-                for _, surface in ipairs(view.inputSurfaces) do surface.component:MoveToFront() end
-            end
+        if lockChanged and not view.locked then
+            view.dragHandle:MoveToFront()
+            for _, surface in ipairs(view.inputSurfaces) do surface.component:MoveToFront() end
         end
     end
 

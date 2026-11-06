@@ -118,9 +118,8 @@ Animation does not change timer/detection state or the separate Settings view.
 
 Placement follows `var.VarPlayer.TOPLEVEL_V2_CUSTOMIZATION_LOCK.value`:
 `0` is unlocked and `1` is locked. This is RuneScape's own interface-lock
-control, read on draw frames and before starting or continuing a drag.
-The plugin never writes that variable. The former `lockLocation` preference
-is ignored and no longer appears in Settings.
+control, read on draw frames and before starting, continuing, or completing a
+drag or resize. The plugin never writes that variable.
 
 Unavailable, invalid, or throwing lock reads keep dragging disabled and log
 one message until the error changes or recovers. An unfinished drag is
@@ -138,9 +137,8 @@ and does not overlap the frame or consume timer content space. A brown rectangle
 (`#311F12`, sampled from the native interface reference) fills its interior,
 with the same `HUD_WINDOW` top, side, and corner sprites
 as the panel at their native four-unit thickness. The panel's top border is
-the separator; there is no additional bottom border or stretched modal-title
-texture. It uses the `TOPLEVEL_V2_MOVE` cursor. Only this
-handle initiates movement; the blue outline is removed. Unlocking also enables
+the separator. It uses the `TOPLEVEL_V2_MOVE` cursor, and only this handle
+initiates movement. Unlocking also enables
 four edge and four corner resize surfaces, with native horizontal, vertical,
 and diagonal cursors around the combined header/window bounds. The drag hit area
 excludes their five-unit inset, so the upper edge and corners remain resizable.
@@ -162,8 +160,10 @@ reports an error instead of guessing.
 Only the active surface captures input during a gesture; other handles are
 disabled. Resizing keeps the opposite edge fixed and uses the same calibrated
 mouse coordinates as movement, rather than rebasing native hold-hook positions.
-Release or drag completion restores the handle bounds and saves once if the
-position or dimensions changed.
+Release or drag completion rechecks the native lock, restores the handle bounds,
+and saves once if the position or dimensions changed and the lock is readable.
+Input-time lock changes update the cached handle state, so recovery before the
+next draw still refreshes the input surfaces correctly.
 Locking or resizing also ends an active drag. UI loss, game-state changes, and
 shutdown cancel it; stale callbacks are ignored, and the header layer and all
 nine input layers are destroyed independently of PrettyUI's owned widget tree.
@@ -202,8 +202,7 @@ from newer website examples. Missing/incompatible dependencies fail explicitly;
 there is no silent raw-UI fallback.
 
 The overlay uses a non-scrolling `Panel` with native `RS3_HUD_WINDOW_*` artwork:
-four-unit borders and corners, rather than `Window`'s eight-unit modal borders
-and sixteen-unit corners. `Panel.new` receives `flowManaged = true` as its third
+four-unit borders and corners. `Panel.new` receives `flowManaged = true` as its third
 argument to disable implicit Alt-drag, with popout and built-in resizing disabled.
 There is no close control. The native settings view still uses `SimpleView`,
 flow layout, and `AddCheckboxButton`.
@@ -223,7 +222,7 @@ area beneath them.
 Layout changes call `SetContentHeight` on both surface scroll controllers and
 `SetSize` on the Panel so scroll content does not retain an obsolete height
 after collapsing rows. There is no `Panel:SetContentHeight` method.
-Previously saved modal-window dimensions remain valid and are not rewritten;
+Saved dimensions remain valid and are not rewritten;
 resize or reset explicitly to use the smaller default dimensions.
 
 Version 1.2.0 has no `NewComponent`, `categoryID = "auto"`, or
