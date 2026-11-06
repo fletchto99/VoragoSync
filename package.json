@@ -23,7 +23,7 @@
     "@types/node": "26.6.6",
     "prettier": "3.9.10",
     "tsx": "4.23.15",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "wasmoon": "1.16.0"
   }
 }
