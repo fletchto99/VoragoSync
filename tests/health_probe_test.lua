@@ -1,4 +1,4 @@
-local Probe = require("health_probe")
+local Probe = require("src/health_probe")
 local valueReads, uiReads = 0, 0
 ValueType = { INTEGER = 0, STRING = 36 }
 

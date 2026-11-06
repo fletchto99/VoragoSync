@@ -22,9 +22,9 @@ local npcs, scopNpcs = { bossNPC }, {}
 local originalPrint = print
 print = function(message) messages[#messages + 1] = message end
 
-local Timer = require("timer")
+local Timer = require("src/timer")
 local originalStart = Timer.start
-local Detector = require("detector")
+local Detector = require("src/detector")
 local originalNewDetector, detectorState = Detector.new, nil
 Detector.new = function()
     detectorState = originalNewDetector()
@@ -339,6 +339,12 @@ local function countMessages(part)
     return count
 end
 
+local App = require("src/app")
+assert(type(App.start) == "function")
+assert(#widgets == 0 and next(preferenceReads) == nil, "importing the app must not start it")
+for _, callbacks in pairs(subscriptions) do assert(next(callbacks) == nil) end
+assert(PluginShutdown == nil, "the root entrypoint must own the shutdown hook")
+
 local library = prettyui
 prettyui = nil
 local loaded, missingDependency = pcall(dofile, "main.lua")
@@ -346,6 +352,7 @@ assert(not loaded and tostring(missingDependency):find("PrettyUI", 1, true))
 assert(#widgets == 0 and next(preferenceReads) == nil, "missing dependency must fail before setup")
 prettyui = library
 dofile("main.lua")
+assert(type(PluginShutdown) == "function")
 for _, callbacks in pairs(subscriptions) do assert(callbacks.VoragoSync ~= nil) end
 assert(hasMessage("[VoragoSync] PrettyUI 1.2.0 loaded."))
 draw(0.02)
@@ -761,7 +768,7 @@ assert(settingsWidget.checkbox.selected.smoothCountdown and settingsWidget.check
 PluginShutdown()
 
 -- A release build still exposes the two ordinary settings, never Debug mode.
-local Build = require("build")
+local Build = require("src/build")
 Build.isDevBuild = false
 local previousDebugReads = preferenceReads.debugMode
 dofile("main.lua")

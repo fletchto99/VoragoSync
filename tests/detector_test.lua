@@ -1,4 +1,4 @@
-local Detector = require("detector")
+local Detector = require("src/detector")
 local function reading(current, changes)
     local result = { valid = true, error = false, name = "Vorago", current = current, maximum = 250000, uiIdentity = "stable" }
     for key, value in pairs(changes or {}) do result[key] = value end
