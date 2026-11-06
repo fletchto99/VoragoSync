@@ -26,7 +26,8 @@ local invalid = setmetatable({ isValid = false }, {
 
 allowLifeRead = false
 local sample = Encounter.read()
-assert(not sample.valid and not sample.error and not sample.voragoPresent)
+assert(not sample.valid and not sample.error and sample.identity == nil)
+assert(sample.status == "Vorago not present - detection disarmed")
 assert(lifeReads == 0, "Vorago absence must short-circuit before life-point reads")
 bosses = { invalid }
 sample = Encounter.read()
@@ -34,12 +35,13 @@ assert(not sample.valid and lifeReads == 0)
 bosses = { npc("Vorago", 9), npc("VORAGO", 3), npc("Vorago", 9), invalid }
 allowLifeRead = true
 sample = Encounter.read()
-assert(sample.valid and sample.voragoPresent and sample.playerAlive)
+assert(sample.valid and not sample.error)
+assert(sample.status == "Vorago present; player alive")
 assert(sample.identity == "3,9")
 
 lifeValue = 0
 sample = Encounter.read()
-assert(not sample.valid and not sample.playerAlive and not sample.error)
+assert(not sample.valid and not sample.error)
 assert(sample.status:find("life points zero", 1, true))
 for _, value in ipairs({ -1, "0", 0.5, math.huge, 0 / 0 }) do
     lifeValue = value

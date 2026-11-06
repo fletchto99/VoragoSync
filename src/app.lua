@@ -51,11 +51,11 @@ function App.start()
         latestEncounter, encounterIdentity = nil, nil
     end
 
-    local function startCountdown(reason)
+    local function startCountdown()
         if state.phase ~= "idle" then return end
         Detector.reset(detector)
         Timer.start(state)
-        print("[VoragoSync] " .. reason .. ": started 24-second countdown.")
+        print("[VoragoSync] Vorago positive HP -> 0: started 24-second countdown.")
     end
 
     local function monitor(deltaSeconds)
@@ -87,7 +87,7 @@ function App.start()
         end
         local busy = state.phase ~= "idle"
         if Detector.observe(detector, latestReading, busy, gap) then
-            startCountdown("Vorago positive HP -> 0")
+            startCountdown()
         end
     end
 
