@@ -114,6 +114,12 @@ npm run check
 checks supported text formats with Prettier (`npm run format` applies fixes).
 There is no bundled application or generated runtime build.
 
+GitHub Actions runs `npm test` on Node.js 22 for pull requests targeting `main`
+and pushes to `main`. Merging requires a pull request, a passing `Tests` check,
+and a branch up to date with `main`; reviewer approval is not required.
+These protections apply to administrators too, and force pushes and branch
+deletion are blocked.
+
 Tests cover guarded reads, HP/Scop triggers, lifecycle resets, all eight
 display-setting combinations, mid-run toggles, bar geometry, persistence and
 error reporting, dev/non-dev settings, dependency failures, and wrapper
