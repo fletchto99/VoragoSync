@@ -1,4 +1,4 @@
-local Timer = require("timer")
+local Timer = require("src/timer")
 
 local function close(actual, expected)
     assert(math.abs(actual - expected) < 1e-9, tostring(actual) .. " ~= " .. tostring(expected))

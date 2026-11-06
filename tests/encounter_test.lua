@@ -1,4 +1,4 @@
-local Encounter = require("encounter")
+local Encounter = require("src/encounter")
 local bosses, scops = {}, {}
 local scopQueries, lifeReads = 0, 0
 local lifeValue, allowLifeRead = 10000, true
