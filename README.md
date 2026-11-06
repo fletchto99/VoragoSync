@@ -25,11 +25,13 @@ From this repository's root, after confirming your **beta** cache destination:
 ```powershell
 $destination = 'C:\ProgramData\Jagex\RuneScape-BETA\dev_plugins\voragosync'
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
-Copy-Item -LiteralPath .\main.lua, .\timer.lua, .\health_probe.lua, .\detector.lua, .\encounter.lua, .\build.lua, .\plugin.json -Destination $destination -Force
+Copy-Item -LiteralPath .\main.lua, .\plugin.json -Destination $destination -Force
+Copy-Item -LiteralPath .\src -Destination $destination -Recurse -Force
 ```
 
-Only those **six Lua files and `plugin.json`** are needed at runtime. Node.js,
-tests, and a build step are not required to load the plugin. If your cache is
+Only **`main.lua`, `plugin.json`, and the `src` directory** are needed at runtime.
+Keep `src` as a subdirectory; do not flatten its files into the plugin root.
+Node.js, tests, and a build step are not required to load the plugin. If your cache is
 elsewhere, use the client loading-screen cog to locate the beta cache with
 `.jcache` files. Nothing in this repository installs game files automatically.
 
@@ -68,7 +70,7 @@ The uniform bar follows raw elapsed time independently of countdown snapping.
 Both bar styles hold full for one second at completion, then clear.
 Operational errors stay visible and are logged even with Debug mode off.
 
-`build.lua` explicitly sets `isDevBuild = true`; this is **not automatic
+`src/build.lua` explicitly sets `isDevBuild = true`; this is **not automatic
 beta-client detection**. A non-dev build sets it to `false`, hides Debug mode,
 and ignores any saved debug preference. Both ordinary settings and the
 manifest's `hasSettingsIcon: true` remain enabled in either build.
@@ -101,6 +103,30 @@ the layout, toggle settings during a countdown, reload to check persistence,
 and reopen Settings to check cleanup.
 
 ## Development
+
+### Repository layout
+
+```text
+main.lua            Native plugin entrypoint (startup and shutdown hook)
+plugin.json         Native plugin manifest
+src/
+  app.lua           Application lifecycle, monitoring, settings, and UI
+  build.lua         Explicit dev/release build flag
+  detector.lua      Guarded HP and Scopulus transition detection
+  encounter.lua     Vorago/Scopulus presence and player life-point reads
+  health_probe.lua  Activity HP reads and validation
+  timer.lua         Countdown state and display math
+tests/              Lua behavioral suites and TypeScript harness
+docs/               Detection and API compatibility notes
+```
+
+`main.lua` starts `src/app.lua` and exposes its cleanup callback as the native
+`PluginShutdown` hook. Each start creates fresh application state, even when
+the Lua module is cached. Internal imports use plugin-root-relative paths
+without extensions, such as `require("src/timer")`, as required by the
+[native loader](https://developer.runescape.com/rs/structure.html#dependencies).
+
+### Local checks
 
 Use **Node.js 22 or newer**:
 
