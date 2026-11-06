@@ -30,14 +30,19 @@ export async function buildRelease(
   }
 
   const files = ["main.lua", "plugin.json", "LICENSE", "README.md"];
-  for (const entry of await readdir(path.join(root, "src"), {
-    recursive: true,
-    withFileTypes: true,
-  })) {
-    if (entry.isDirectory()) continue;
-    if (!entry.isFile()) throw new Error(`Unsupported runtime entry: ${entry.name}`);
-    if (entry.name.endsWith(".lua")) {
-      files.push(path.relative(root, path.join(entry.parentPath, entry.name)));
+  for (const [directory, extension] of [
+    ["src", ".lua"],
+    ["docs", ".md"],
+  ]) {
+    for (const entry of await readdir(path.join(root, directory), {
+      recursive: true,
+      withFileTypes: true,
+    })) {
+      if (entry.isDirectory()) continue;
+      if (!entry.isFile()) throw new Error(`Unsupported release entry: ${directory}/${entry.name}`);
+      if (entry.name.endsWith(extension)) {
+        files.push(path.relative(root, path.join(entry.parentPath, entry.name)));
+      }
     }
   }
   const contents: Record<string, Uint8Array> = {};

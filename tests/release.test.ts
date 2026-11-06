@@ -27,12 +27,13 @@ async function fixture(t: TestContext) {
       "LICENSE",
       "README.md",
       "src",
+      "docs",
     ].map((file) => cp(file, path.join(root, file), { recursive: true })),
   );
   return root;
 }
 
-test("release ZIP contains only runtime files and notices, with debug disabled", async (t) => {
+test("release ZIP contains runtime, documentation and notices, with debug disabled", async (t) => {
   const output = await temporaryDirectory(t);
   const archivePath = await buildRelease(tag, process.cwd(), output);
   assert.equal(path.basename(archivePath), `voragosync-${tag}.zip`);
@@ -41,15 +42,35 @@ test("release ZIP contains only runtime files and notices, with debug disabled",
   const runtimeFiles = (await readdir("src", { recursive: true }))
     .filter((file) => file.endsWith(".lua"))
     .map((file) => `src/${file.split(path.sep).join("/")}`);
+  const documentationFiles = (await readdir("docs", { recursive: true }))
+    .filter((file) => file.endsWith(".md"))
+    .map((file) => `docs/${file.split(path.sep).join("/")}`);
   assert.deepEqual(
     Object.keys(files).sort(),
-    ["main.lua", "plugin.json", "LICENSE", "README.md", ...runtimeFiles].sort(),
+    [
+      "main.lua",
+      "plugin.json",
+      "LICENSE",
+      "README.md",
+      ...runtimeFiles,
+      ...documentationFiles,
+    ].sort(),
   );
   for (const [file, contents] of Object.entries(files)) {
     if (file === "src/build.lua") {
       assert.match(Buffer.from(contents).toString("utf8"), /return \{ isDevBuild = false \}/);
     } else {
       assert.deepEqual(Buffer.from(contents), await readFile(file), `${file} must be unchanged`);
+    }
+  }
+  for (const file of ["README.md", ...documentationFiles]) {
+    const markdown = Buffer.from(files[file]).toString("utf8");
+    for (const [, href] of markdown.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+      if (/^(?:https?:|mailto:|#)/i.test(href)) continue;
+      const target = path.posix.normalize(
+        path.posix.join(path.posix.dirname(file), href.split("#")[0]),
+      );
+      assert.ok(Object.hasOwn(files, target), `${file} links to missing release document: ${href}`);
     }
   }
   assert.match(await readFile(path.join("src", "build.lua"), "utf8"), /isDevBuild = true/);
