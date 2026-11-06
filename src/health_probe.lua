@@ -30,7 +30,6 @@ local function readVariable(domain, name, expectedType, label)
 end
 
 local function inspectUI()
-    local metadata = {}
     local state = "visible"
     local blocked = nil
     local identity = "container=unavailable"
@@ -39,18 +38,14 @@ local function inspectUI()
         local component = type(combinedID) == "number" and ui.Interfaces:GetComponent(combinedID) or nil
         if component == nil then
             state = "not fully exposed"
-            metadata[#metadata + 1] = item.role .. "=unavailable"
         elseif not integer(component.type) or type(component.visibleGlobal) ~= "boolean"
             or type(component.isRestricted) ~= "boolean" then
             blocked = "Invalid UI metadata"
-            metadata[#metadata + 1] = item.role .. "=invalid-metadata"
         else
             if item.role == "container" then
                 identity = string.format("container(type=%d,visible=%s)",
                     component.type, tostring(component.visibleGlobal))
             end
-            metadata[#metadata + 1] = string.format("%s(type=%d,visible=%s,restricted=%s)",
-                item.role, component.type, tostring(component.visibleGlobal), tostring(component.isRestricted))
             if component.isRestricted then
                 blocked = "Restricted UI"
             elseif not component.visibleGlobal then
@@ -59,7 +54,7 @@ local function inspectUI()
             end
         end
     end
-    return state, table.concat(metadata, " "), blocked, identity
+    return state, blocked, identity
 end
 
 local function failure(result, status, detail)
@@ -68,8 +63,8 @@ local function failure(result, status, detail)
 end
 
 function HealthProbe.read()
-    local uiState, uiMetadata, blocked, uiIdentity = inspectUI()
-    local result = { status = blocked, ui = uiMetadata, uiIdentity = uiIdentity, valid = false, error = false }
+    local uiState, blocked, uiIdentity = inspectUI()
+    local result = { status = blocked, uiIdentity = uiIdentity, valid = false, error = false }
     if blocked then
         result.error = blocked ~= "Inactive: UI hidden"
         return result

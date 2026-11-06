@@ -14,6 +14,8 @@
   },
   "scripts": {
     "test": "tsx --test tests/*.test.ts",
+    "test:release": "tsx --test tests/native.test.ts",
+    "build:release": "tsx scripts/build-release.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "26.6.6",
+    "fflate": "0.8.3",
     "prettier": "3.9.10",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
