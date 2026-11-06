@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { LuaFactory } from "wasmoon";
+import { unzipSync } from "fflate";
 
 import {
   SECTIONS,
@@ -20,11 +21,22 @@ const sourceFiles = [
   "build.lua",
 ];
 const runtimeFiles = ["main.lua", ...sourceFiles.map((file) => `src/${file}`)];
+const archivePath = process.env.RELEASE_ARCHIVE;
+if (process.env.npm_lifecycle_event === "test:release") {
+  assert.ok(archivePath, "Set RELEASE_ARCHIVE to the ZIP to test.");
+}
+const archiveFiles = archivePath ? unzipSync(await readFile(archivePath)) : undefined;
+
+async function readRuntime(file: string) {
+  if (!archiveFiles) return readFile(path.resolve(file), "utf8");
+  assert.ok(archiveFiles[file], `Missing packaged runtime file: ${file}`);
+  return Buffer.from(archiveFiles[file]).toString("utf8");
+}
 
 async function createLua() {
   const factory = new LuaFactory();
   for (const file of runtimeFiles) {
-    await factory.mountFile(file, await readFile(path.resolve(file), "utf8"));
+    await factory.mountFile(file, await readRuntime(file));
   }
   const lua = await factory.createEngine();
   await lua.doString('assert(_VERSION == "Lua 5.4"); package.path = "./?.lua;" .. package.path');
@@ -73,17 +85,24 @@ test("default timer matches the frozen Alt1 reference throughout the countdown a
 });
 
 test("standalone runtime declares VoragoSync, PrettyUI and settings without extra permissions", async (t) => {
-  const files = await readdir(".");
+  const files = archiveFiles
+    ? Object.keys(archiveFiles).filter((file) => !file.includes("/"))
+    : await readdir(".");
   assert.deepEqual(
     files.filter((file) => file.endsWith(".lua")),
     ["main.lua"],
   );
-  const sources = await readdir("src", { recursive: true });
+  const sources = archiveFiles
+    ? Object.keys(archiveFiles)
+        .filter((file) => file.startsWith("src/"))
+        .map((file) => file.slice(4))
+    : await readdir("src", { recursive: true });
   assert.deepEqual(sources.filter((file) => file.endsWith(".lua")).sort(), [...sourceFiles].sort());
-  const manifest = JSON.parse(await readFile("plugin.json", "utf8"));
+  const manifest = JSON.parse(await readRuntime("plugin.json"));
+  const metadata = JSON.parse(await readFile("package.json", "utf8"));
   assert.deepEqual(manifest, {
     name: "VoragoSync",
-    version: "0.1.0",
+    version: metadata.version,
     hasSettingsIcon: true,
     requiredDependencies: { prettyui: 6398181 },
     optionalDependencies: {},
@@ -91,9 +110,9 @@ test("standalone runtime declares VoragoSync, PrettyUI and settings without extr
     optionalPermissions: [],
   });
   for (const file of runtimeFiles) {
-    assert.doesNotMatch(await readFile(path.resolve(file), "utf8"), /voragotag/i);
+    assert.doesNotMatch(await readRuntime(file), /voragotag/i);
   }
   const lua = await createLua();
   t.after(() => lua.global.close());
-  assert.equal(await lua.doString("return require('src/build').isDevBuild"), true);
+  assert.equal(await lua.doString("return require('src/build').isDevBuild"), !archiveFiles);
 });
