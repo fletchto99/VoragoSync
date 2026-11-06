@@ -1,6 +1,6 @@
 -- Contract double for the documented host APIs, not an in-game UI test.
 local components, subscriptions, messages = {}, {}, {}
-local nextID, queryCount, activityQueries, scopQueries = 0, 0, 0, 0
+local nextID, queryCount, activityQueries = 0, 0, 0
 local rootAvailable, activityUIAvailable = false, true
 local storedPreferences, preferenceReads, writes = {}, {}, {}
 local saveOK = true
@@ -18,7 +18,7 @@ PersistentDB = {
     end,
 }
 local bossNPC = { isValid = true, displayName = "Vorago", uid = 1, configID = 1, isMultiNPC = false }
-local npcs, scopNpcs = { bossNPC }, {}
+local npcs = { bossNPC }
 local originalPrint = print
 print = function(message) messages[#messages + 1] = message end
 
@@ -32,7 +32,7 @@ Detector.new = function()
 end
 local starts, lastTimerState = 0, nil
 Timer.start = function(state)
-    assert(detectorState.scop == nil and detectorState.positive == nil, "shared start must clear both latches")
+    assert(detectorState.positive == nil, "start must clear HP history")
     starts, lastTimerState = starts + 1, state
     originalStart(state)
 end
@@ -69,13 +69,9 @@ var = {
     },
 }
 NPCList = { ByName = function(name)
-    if name == "Vorago" then
-        queryCount = queryCount + 1
-        return npcs
-    end
-    assert(name == "*Scopul*")
-    scopQueries = scopQueries + 1
-    return scopNpcs
+    assert(name == "Vorago", "only Vorago presence should be queried")
+    queryCount = queryCount + 1
+    return npcs
 end }
 
 Event = {}
@@ -316,7 +312,7 @@ local function defaults()
     bossRoot.isRestricted, hp.isRestricted, hp.type = false, false, 7
     lifeVar.value, lifeVar.valueType = 10000, ValueType.INTEGER
     bossNPC.uid, bossNPC.isValid = 1, true
-    npcs, scopNpcs = { bossNPC }, {}
+    npcs = { bossNPC }
 end
 local function reenter()
     defaults()
@@ -360,7 +356,7 @@ assert(hasMessage("Waiting for the in-game"))
 rootAvailable = true
 draw(0.02)
 checkLayout()
-assert(queryCount == 1 and scopQueries == 1 and activityQueries == 3, "encounter monitoring is automatic")
+assert(queryCount == 1 and activityQueries == 3, "encounter monitoring is automatic")
 assert(timerWidget.root.height == 88)
 assert(debugLabel(74).hidden and debugLabel(98).hidden and debugLabel(122).hidden)
 assert(preferenceReads.debugMode == 1)
@@ -385,6 +381,7 @@ observe(250000)
 find("Text", "Armed: Vorago HP")
 observe(0)
 assert(starts == 1 and lastTimerState.phase == "running")
+assert(hasMessage("Vorago positive HP -> 0: started 24-second countdown."))
 close(lastTimerState.elapsed, 0)
 checkLayout("24.0s", false)
 draw(0.5)
@@ -547,134 +544,43 @@ draw(0.05)
 assert(starts == baseline)
 checkLayout()
 
--- Scop presence is encounter-scoped, has no fixed count, and shares the start path.
-local scopA = { isValid = true, displayName = "Scopulus", uid = 10 }
-local scopB = { isValid = true, displayName = "Scopulus", uid = 11 }
-reenter()
-baseline = starts
-observe(250000)
-scopNpcs = { scopA, scopB }
-draw(0.05)
-assert(detectorState.scop ~= nil)
-find("Text", "Armed: HP + Scopulus (2 present)")
-scopNpcs = { scopB }
-draw(0.05)
-find("Text", "Armed: HP + Scopulus (1 present)")
-assert(starts == baseline)
-scopNpcs = {}
-draw(0.05)
-assert(starts == baseline + 1 and detectorState.scop == nil)
-assert(hasMessage("Scopulus presence -> absence (heuristic)"))
-close(lastTimerState.elapsed, 0)
-scopNpcs, currentVar.value = { scopA, scopB }, 100
-draw(0.05)
-scopNpcs, currentVar.value = {}, 0
-draw(0.05)
-assert(starts == baseline + 1 and detectorState.scop == nil, "active-run edges cannot restart or queue")
-draw(24)
-draw(1.01)
-assert(starts == baseline + 1 and lastTimerState.phase == "idle")
-scopNpcs, currentVar.value = { scopA, scopB }, 100
-draw(0.05)
-scopNpcs, currentVar.value = {}, 0
-draw(0.05)
-assert(starts == baseline + 2, "simultaneous HP and Scop edges start only one timer")
-assert(detectorState.scop == nil)
+-- Encounter and player-health guards still apply to the shared HP trigger.
+for _, invalidate in ipairs({
+    function() npcs = {} end,
+    function() npcs = nil end,
+    function() bossNPC.isValid = false end,
+    function() lifeVar.value = 0 end,
+    function() lifeVar.valueType = ValueType.STRING end,
+}) do
+    reenter()
+    baseline = starts
+    observe(100)
+    invalidate()
+    observe(0)
+    assert(starts == baseline and detectorState.positive == nil,
+        "encounter loss/error/death must discard HP history")
+    defaults()
+    draw(0.05)
+    assert(starts == baseline, "returning at zero must not retain an old HP edge")
+    observe(100)
+    observe(0)
+    assert(starts == baseline + 1, "a fresh HP edge must rearm after recovery")
+end
 
 reenter()
 baseline = starts
-scopNpcs = { scopA, scopB }
-draw(0.05)
-local beforeBothGone = scopQueries
-npcs, scopNpcs = {}, {}
-draw(0.05)
-assert(scopQueries == beforeBothGone, "Vorago absence is checked before querying Scop disappearance")
-assert(starts == baseline and detectorState.scop == nil)
-npcs = { bossNPC }
-draw(0.05)
-assert(starts == baseline, "returning to an empty encounter is not a completion")
-
-scopNpcs = { scopA, scopB }
-draw(0.05)
-lifeVar.value, scopNpcs = 0, {}
-local beforeDeath = scopQueries
-draw(0.05)
-assert(scopQueries == beforeDeath and starts == baseline and detectorState.scop == nil,
-    "death camera with Vorago still loaded must disarm before Scop absence")
-lifeVar.value = 10000
-draw(0.05)
-assert(starts == baseline)
-scopNpcs = { scopA, scopB }
-draw(0.05)
-lifeVar.valueType, scopNpcs = ValueType.STRING, {}
-draw(0.05)
-assert(starts == baseline and detectorState.scop == nil)
-lifeVar.valueType = ValueType.INTEGER
-draw(0.05)
-assert(starts == baseline, "unavailable player health must not preserve arming")
-scopNpcs = { scopA, scopB }
-draw(0.05)
-scopNpcs = nil
-draw(0.05)
-assert(starts == baseline and detectorState.scop == nil)
-scopNpcs = {}
-draw(0.05)
-assert(starts == baseline, "failed query is not zero minions")
-
-scopNpcs = { scopA, scopB }
-currentVar.value = 100
-draw(0.05)
-bossNPC.uid, scopNpcs, currentVar.value = 2, {}, 0
-draw(0.05)
-assert(starts == baseline and detectorState.scop == nil, "encounter identity change must discard the flag")
+observe(100)
+bossNPC.uid = 2
+observe(0)
+assert(starts == baseline and detectorState.positive == nil, "encounter identity change must discard HP history")
 reenter()
-scopNpcs = { scopA, scopB }
-draw(0.05)
+observe(100)
 emit("GameStateChanged", { newState = GameState.LOADING })
-scopNpcs = {}
+currentVar.value = 0
 draw(1)
 emit("GameStateChanged", { newState = GameState.GAME })
 draw(0.05)
-assert(starts == baseline and detectorState.scop == nil, "loading cannot carry an armed flag")
-
--- Accepted residual limitation: out-of-range Scops with Vorago still loaded
--- are indistinguishable from defeated Scops under the user-selected proxy.
-scopNpcs = { scopA, scopB }
-draw(0.05)
-scopNpcs = {}
-draw(0.05)
-assert(starts == baseline + 1)
-draw(24)
-assert(lastTimerState.phase == "complete")
-scopNpcs = { scopA, scopB }
-draw(0.05)
-scopNpcs = {}
-draw(0.05)
-assert(starts == baseline + 1 and detectorState.scop == nil, "full-hold edges are consumed")
-draw(1)
-assert(starts == baseline + 1 and lastTimerState.phase == "idle")
-scopNpcs = { scopA, scopB }
-draw(0.05)
-scopNpcs = {}
-draw(0.05)
-assert(starts == baseline + 2, "a fresh observation rearms after the hold")
-draw(12)
-npcs = {}
-draw(5)
-assert(lastTimerState.phase == "running", "Vorago loss must not cancel a Scop-started timer")
-close(lastTimerState.elapsed, 17)
-draw(7)
-draw(1.01)
-assert(lastTimerState.phase == "idle")
-reenter()
-baseline = starts
-
-scopNpcs, currentVar.value = { scopA, scopB }, 100
-draw(0.05)
-assert(detectorState.scop ~= nil)
-observe(0)
-assert(starts == baseline + 1 and detectorState.scop == nil,
-    "an HP-only start must also clear the Scop latch while minions are still present")
+assert(starts == baseline and detectorState.positive == nil, "loading cannot carry HP history")
 reenter()
 baseline = starts
 
@@ -684,7 +590,7 @@ observe(0)
 draw(1.25)
 baseline = starts
 local runningWindow, elapsedBeforeSettings = timerWidget, lastTimerState.elapsed
-local armedHP, armedScop = detectorState.positive, detectorState.scop
+local armedHP = detectorState.positive
 openSettings()
 for _, debugMode in ipairs({ false, true }) do
     for _, smooth in ipairs({ false, true }) do
@@ -693,7 +599,7 @@ for _, debugMode in ipairs({ false, true }) do
             setting("smoothCountdown", smooth)
             setting("removeBarSections", uniform)
             assert(starts == baseline and lastTimerState.elapsed == elapsedBeforeSettings)
-            assert(detectorState.positive == armedHP and detectorState.scop == armedScop)
+            assert(detectorState.positive == armedHP)
             assert(timerWidget == runningWindow and runningWindow.destroyCalls == 0)
             assert(timerWidget.root.height == (debugMode and 166 or 88))
             assert(debugLabel(74).hidden == not debugMode)

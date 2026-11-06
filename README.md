@@ -1,8 +1,8 @@
 # VoragoSync
 
 A native **RuneScape 3** plugin that automatically starts a 24-second Vorago
-transition timer from a guarded HP-zero signal or Scopulus-clear presence
-signal. Built for the RuneScape developer beta; no Alt1 application is needed.
+transition timer from a guarded HP-zero signal. Built for the RuneScape
+developer beta; no Alt1 application is needed.
 
 The compact overlay places the countdown **left of the bar on the same row**,
 with no heading, audio, or manual Start/Reset buttons. Its four sections are
@@ -83,24 +83,21 @@ invalid, hidden, missing, or stale observations do not trigger. Checks run
 about every 50ms on available draw frames; elapsed draw time drives the timer.
 Edges during a countdown or its completion hold are consumed, never queued.
 
-The Scopulus trigger uses a **presence proxy**: observing at least one relevant
-Scopulus arms it; their disappearance starts once while the same valid Vorago
-remains and the player is alive. There is no target/final-hit requirement or
-fixed minion count. The proxy assumes the small arena keeps relevant NPCs in
-client range. Scopuli leaving range while Vorago remains loaded can look like
-completion, and disappearance is not proof of death or an exact kill timestamp.
+The same HP trigger covers Scopulus: the activity HP bar is present during
+that phase and reflects Scopulus HP, as observed in-game by the user. There is
+no separate minion-presence or disappearance trigger. Detection still requires
+the same valid Vorago encounter and a living player.
 
 Ordinary boss-bar/NPC disappearance during jumps or dropdown does not cancel
 an already-running timer. Leaving active game state, reconnecting, plugin UI
 loss, or disabling the plugin cancels it. See [detection and compatibility
 details](docs/technical.md) for freshness, lifecycle, and PrettyUI constraints.
 
-Normal HP and Scop triggers, including a P2 HP signal, have **user-reported
-beta successes**. Every rotation, death/teleport edge case, and exact Scop
-removal timing have not been validated. The new PrettyUI rendering, settings
-interaction, and client-side teardown still need an in-game check: confirm
-the layout, toggle settings during a countdown, reload to check persistence,
-and reopen Settings to check cleanup.
+The HP trigger, including a P2 HP signal, has **user-reported beta successes**.
+Not every rotation or death/teleport edge case has been validated. The new
+PrettyUI rendering, settings interaction, and client-side teardown still need
+an in-game check: confirm the layout, toggle settings during a countdown,
+reload to check persistence, and reopen Settings to check cleanup.
 
 ## Development
 
@@ -112,8 +109,8 @@ plugin.json         Native plugin manifest
 src/
   app.lua           Application lifecycle, monitoring, settings, and UI
   build.lua         Explicit dev/release build flag
-  detector.lua      Guarded HP and Scopulus transition detection
-  encounter.lua     Vorago/Scopulus presence and player life-point reads
+  detector.lua      Guarded HP transition detection
+  encounter.lua     Vorago presence and player life-point reads
   health_probe.lua  Activity HP reads and validation
   timer.lua         Countdown state and display math
 tests/              Lua behavioral suites and TypeScript harness
@@ -151,7 +148,7 @@ version updates are grouped into one pull request per ecosystem; major updates
 get separate pull requests. See [the configuration](.github/dependabot.yml).
 The external PrettyUI plugin is managed manually, not by Dependabot.
 
-Tests cover guarded reads, HP/Scop triggers, lifecycle resets, all eight
+Tests cover guarded reads, HP triggers, lifecycle resets, all eight
 display-setting combinations, mid-run toggles, bar geometry, persistence and
 error reporting, dev/non-dev settings, dependency failures, and wrapper
 cleanup. PrettyUI tests use a 1.2.0 contract double, not the game's renderer.
