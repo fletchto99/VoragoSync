@@ -59,20 +59,36 @@ plugin with `poff voragosync`.
 Monitoring starts automatically. Open **Plugin Hub > Manage > VoragoSync >
 Settings** using the plugin's Settings icon.
 
-| Setting             | Default | Effect                                                                     |
-| ------------------- | ------- | -------------------------------------------------------------------------- |
-| Smooth countdown    | Off     | Use 0.1s steps throughout, rather than 0.6s long sections and 0.1s ult/tc. |
-| Remove bar sections | Off     | Show a single gapless gold bar without segment labels; keep the countdown. |
-| Debug mode          | Off     | Dev builds only: show Activity, Current HP, and Armed state below the bar. |
+| Setting                   | Default | Effect                                                                     |
+| ------------------------- | ------- | -------------------------------------------------------------------------- |
+| Smooth countdown          | Off     | Use 0.1s steps throughout, rather than 0.6s long sections and 0.1s ult/tc. |
+| Remove bar sections       | Off     | Show a single gapless gold bar without segment labels; keep the countdown. |
+| Only show in Vorago arena | Off     | Show with a Vorago boss bar or active countdown, plus a 5s buffer.         |
+| Debug mode                | Off     | Dev builds only: show Activity, Current HP, and Armed state below the bar. |
 
 All settings persist and apply mid-countdown without resetting elapsed time.
 The uniform bar follows raw elapsed time independently of countdown snapping.
 Both bar styles hold full for one second at completion, then clear.
-Operational errors stay visible and are logged even with Debug mode off.
+Operational errors are logged even with Debug mode off and shown whenever
+the overlay is visible.
+
+**Only show in Vorago arena** shows the overlay while a valid, active Vorago
+boss bar is detected or a countdown (including its full-bar hold) is active.
+Once neither is active, it stays visible for **five more seconds** before
+fading out. Renewed activity restarts that buffer. Vorago's NPC presence is not
+required, so phase transitions do not hide an active timer, and the lobby
+NPC alone does not show it. Monitoring continues while hidden, and Settings
+remains accessible. This is an activity proxy, not an arena boundary check:
+teleporting out mid-countdown can leave the overlay visible until the timer,
+hold, buffer, and fade-out finish. Reloading or leaving active game state clears the buffer.
+The overlay fades in over **one second** whenever it first appears or returns from
+being hidden, and fades out over **one second** after the buffer. If activity returns
+during fade-out, it smoothly reverses from its current opacity. Fading does not
+delay the countdown.
 
 `src/build.lua` explicitly sets `isDevBuild = true`; this is **not automatic
 beta-client detection**. A non-dev build sets it to `false`, hides Debug mode,
-and ignores any saved debug preference. Both ordinary settings and the
+and ignores any saved debug preference. All ordinary settings and the
 manifest's `hasSettingsIcon: true` remain enabled in either build.
 
 ## Detection and current scope
@@ -140,9 +156,9 @@ npm run check
 checks supported text formats with Prettier (`npm run format` applies fixes).
 There is no bundled application or generated runtime build.
 
-Tests cover guarded reads, HP/Scop triggers, lifecycle resets, all eight
+Tests cover guarded reads, HP/Scop triggers, lifecycle resets, all sixteen
 display-setting combinations, mid-run toggles, bar geometry, persistence and
-error reporting, dev/non-dev settings, dependency failures, and wrapper
+error reporting, arena visibility, dev/non-dev settings, dependency failures, and wrapper
 cleanup. PrettyUI tests use a 1.2.0 contract double, not the game's renderer.
 Default timing is compared at thousands of boundaries against a small,
 attributed [test-only reference](tests/reference/timer.ts) from VoragoTag.

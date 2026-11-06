@@ -17,6 +17,7 @@ function App.start()
     local settingOptions = {
         { key = "smoothCountdown", label = "Smooth countdown" },
         { key = "removeBarSections", label = "Remove bar sections" },
+        { key = "onlyInArena", label = "Only show in Vorago arena" },
     }
     if Build.isDevBuild then
         settingOptions[#settingOptions + 1] = { key = "debugMode", label = "Debug mode" }
@@ -33,6 +34,9 @@ function App.start()
     local latestReading = nil
     local latestEncounter, encounterIdentity = nil, nil
     local lastMonitorError = nil
+    local visibilityGraceRemaining, visibilityWasActive = 0, false
+    local visibilityGraceSeconds = 5
+    local fadeSeconds = 1
     local view, settingsView = nil, nil
     local inGame, waitingForUI = true, false
     local notice = ""
@@ -49,6 +53,7 @@ function App.start()
         sinceSample = Detector.pollInterval
         latestReading, lastMonitorError = nil, nil
         latestEncounter, encounterIdentity = nil, nil
+        visibilityGraceRemaining, visibilityWasActive = 0, false
     end
 
     local function startCountdown(reason)
@@ -159,6 +164,7 @@ function App.start()
         end
         widget.closeButton.hidden, widget.closeButton.enabled, widget.closeButton.clickthrough = true, false, true
         view = own(widget)
+        view.opacity, widget.root.alpha = 0, 0
         view.sections = {}
         view.countdown = text(widget, "0.0s", 10, 10, 70, 28)
         local background = Vector4.new(0.06, 0.05, 0.03, 1)
@@ -229,7 +235,30 @@ function App.start()
         return "Armed: no - waiting for a fresh observation"
     end
 
-    local function render()
+    local function render(deltaSeconds)
+        local active = state.phase ~= "idle"
+            or (latestReading ~= nil and latestReading.valid and latestReading.name:lower() == "vorago")
+        -- Start a full grace period when inactivity is observed, including after a long frame.
+        if active or visibilityWasActive then
+            visibilityGraceRemaining = visibilityGraceSeconds
+        else
+            visibilityGraceRemaining = math.max(0, visibilityGraceRemaining - deltaSeconds)
+        end
+        visibilityWasActive = active
+        local targetHidden = preferences.onlyInArena and visibilityGraceRemaining == 0
+        if view.targetHidden ~= targetHidden then
+            view.targetHidden = targetHidden
+        else
+            local direction = targetHidden and -1 or 1
+            local opacity = math.max(0, math.min(1, view.opacity + direction * deltaSeconds / fadeSeconds))
+            if view.opacity ~= opacity then
+                view.widget.root.alpha, view.opacity = opacity, opacity
+            end
+        end
+        local hidden = targetHidden and view.opacity == 0
+        if view.hidden ~= hidden then
+            view.widget.root.hidden, view.hidden = hidden, hidden
+        end
         if view.debugMode ~= preferences.debugMode then
             view.debugMode = preferences.debugMode
             view.activity.hidden, view.hp.hidden, view.armed.hidden = not view.debugMode, not view.debugMode, not view.debugMode
@@ -302,7 +331,7 @@ function App.start()
         end
         Timer.update(state, event.timeDeltaSecs)
         monitor(event.timeDeltaSecs)
-        render()
+        render(event.timeDeltaSecs)
     end)
 
     Event.GameStateChanged.Subscribe(eventRef, function(event)

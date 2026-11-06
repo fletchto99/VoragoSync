@@ -68,6 +68,38 @@ Loading/logout/reconnect, plugin UI loss, and shutdown still cancel.
 Settings remounts and display changes do not reset timing or detection.
 Repeated genuine monitoring errors are reported without logging on every poll.
 
+The opt-in `onlyInArena` display preference uses the existing 50ms activity
+sample and timer state, without extra queries. A valid, active bar named
+Vorago (case-insensitive after normalizing markup/whitespace) or a non-idle
+timer keeps the overlay visible. NPC presence is not a visibility condition:
+Vorago is also present in the lobby and absent between phases until his next
+drop. The countdown and its one-second full-bar hold stay visible without
+either Vorago or his bar.
+
+When neither the bar nor timer is active, a five-second grace period begins
+on the draw that observes inactivity. Subsequent draw deltas expire it, so a
+long frame ending a timer cannot consume the new buffer. Renewed activity
+resets the grace period. Invalid/hidden/unrelated bar readings do not keep
+refreshing it. Visibility history is maintained even with the setting off;
+toggling display settings does not restart the buffer. UI loss, leaving
+active game state, and shutdown clear it along with detection/timer state.
+
+Hiding affects only the overlay root, not monitoring or widget ownership.
+Settings remains accessible and monitoring errors continue to be logged.
+This is not a coordinate-based arena boundary check: teleporting out during
+a countdown can leave the overlay visible through the timer, hold, buffer, and fade-out.
+
+On initial display and each hidden-to-visible transition, the overlay root's
+alpha starts at zero and rises linearly to one over one second of subsequent draw
+time. After the grace period expires, alpha falls to zero at the same rate,
+with the root remaining visible until fade-out completes. A change of direction
+preserves current opacity and starts moving toward the new target on subsequent
+draws. This lets returning activity or Settings changes reverse an in-progress
+fade without flashing. Time spent hidden does not advance fade-in. Remaining
+visible (including activity returning within the grace period) does not restart
+it. A recreated window starts transparent; lifecycle teardown remains immediate.
+Animation does not change timer/detection state or the separate Settings view.
+
 ## PrettyUI 1.2.0
 
 `plugin.json` declares `"requiredDependencies": { "prettyui": 6398181 }`.

@@ -6,7 +6,7 @@ local storedPreferences, preferenceReads, writes = {}, {}, {}
 local saveOK = true
 PersistentDB = {
     GetBool = function(_, key)
-        assert(key == "debugMode" or key == "smoothCountdown" or key == "removeBarSections")
+        assert(key == "debugMode" or key == "smoothCountdown" or key == "removeBarSections" or key == "onlyInArena")
         preferenceReads[key] = (preferenceReads[key] or 0) + 1
         return type(storedPreferences[key]) == "boolean" and storedPreferences[key] or nil
     end,
@@ -117,7 +117,7 @@ local function newComponent(kind, parent)
         kind = kind, parent = parent, alive = true, hooks = {},
         interfaceID = parent.interfaceID, staticID = parent.staticID,
         categoryID = parent.categoryID >= 0 and parent.categoryID or 0, dynamicID = nextID,
-        hidden = false, enabled = true,
+        hidden = false, enabled = true, alpha = 1,
     }
     function component:SetPos(x, y)
         assert(self.alive and math.type(x) == "integer" and math.type(y) == "integer")
@@ -364,11 +364,24 @@ assert(queryCount == 1 and scopQueries == 1 and activityQueries == 3, "encounter
 assert(timerWidget.root.height == 88)
 assert(debugLabel(74).hidden and debugLabel(98).hidden and debugLabel(122).hidden)
 assert(preferenceReads.debugMode == 1)
+assert(timerWidget.root.alpha == 0, "the first visible draw starts transparent")
+draw(0)
+assert(timerWidget.root.alpha == 0, "zero elapsed time must not advance the fade")
+draw(0.125)
+close(timerWidget.root.alpha, 0.125)
+draw(0.375)
+close(timerWidget.root.alpha, 0.5)
+draw(0.25)
+close(timerWidget.root.alpha, 0.75)
+draw(0.25)
+assert(timerWidget.root.alpha == 1, "the fade reaches full opacity after one second")
 for _ = 1, 20 do draw(0.05) end
+assert(timerWidget.root.alpha == 1, "continuous visibility must not restart the fade")
 assert(starts == 0, "enabling at zero must not start")
 openSettings()
-assert(#settingsWidget.checkbox.choices == 3)
+assert(#settingsWidget.checkbox.choices == 4)
 assert(not settingsWidget.checkbox.selected.debugMode)
+assert(not settingsWidget.checkbox.selected.onlyInArena and preferenceReads.onlyInArena == 1)
 setting("debugMode", true)
 assert(storedPreferences.debugMode and timerWidget.root.height == 166)
 find("Text", "Activity: Vorago")
@@ -401,6 +414,7 @@ activityUIAvailable, hideVar.value = false, 1
 npcs = {}
 draw(5)
 assert(lastTimerState.phase == "running")
+assert(not timerWidget.root.hidden, "arena visibility is opt-in")
 draw(7)
 assert(lastTimerState.phase == "complete" and starts == 1)
 draw(1.01)
@@ -678,6 +692,226 @@ assert(starts == baseline + 1 and detectorState.scop == nil,
 reenter()
 baseline = starts
 
+-- A named boss bar or active timer keeps the overlay visible, with five seconds of grace.
+setting("onlyInArena", true)
+local arenaWindow, arenaSettings = timerWidget, settingsWidget
+assert(storedPreferences.onlyInArena and not arenaWindow.root.hidden)
+hideVar.value = 1
+local queriesBeforeHide, activityBeforeHide = queryCount, activityQueries
+draw(0.05)
+assert(not arenaWindow.root.hidden, "boss-bar loss starts the buffer rather than hiding immediately")
+assert(queryCount == queriesBeforeHide + 1 and activityQueries == activityBeforeHide + 3,
+    "visibility reuses the regular monitoring samples")
+draw(4.99)
+assert(not arenaWindow.root.hidden, "keep the overlay visible for the full five-second buffer")
+draw(0.01)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1, "begin fading only after the five-second buffer")
+draw(0)
+assert(arenaWindow.root.alpha == 1, "zero elapsed time must not advance the fade-out")
+draw(0.5)
+close(arenaWindow.root.alpha, 0.5)
+assert(not arenaWindow.root.hidden, "keep the root visible until the fade-out finishes")
+draw(0.25)
+close(arenaWindow.root.alpha, 0.25)
+assert(not arenaWindow.root.hidden)
+draw(0.25)
+assert(arenaWindow.root.hidden and arenaWindow.root.alpha == 0, "hide after the one-second fade-out")
+assert(timerWidget == arenaWindow and arenaWindow.destroyCalls == 0, "hide rather than destroy the window")
+assert(arenaSettings.destroyCalls == 0 and not arenaSettings.root.hidden, "Settings remains accessible outside the arena")
+assert(arenaSettings.root.alpha == 1, "the timer animation does not fade Settings")
+setting("onlyInArena", false)
+assert(not arenaWindow.root.hidden, "disabling the setting shows the overlay immediately")
+assert(arenaWindow.root.alpha == 0, "revealing via Settings starts a fresh fade")
+draw(0.5)
+close(arenaWindow.root.alpha, 0.5)
+setting("onlyInArena", true)
+assert(not arenaWindow.root.hidden, "hiding mid-fade must not abruptly hide the root")
+close(arenaWindow.root.alpha, 0.5)
+draw(0.25)
+close(arenaWindow.root.alpha, 0.25)
+setting("onlyInArena", false)
+close(arenaWindow.root.alpha, 0.25)
+draw(0.25)
+close(arenaWindow.root.alpha, 0.5)
+setting("onlyInArena", true)
+draw(0.5)
+assert(arenaWindow.root.hidden and arenaWindow.root.alpha == 0,
+    "setting changes reverse the fade from its current opacity without restarting the buffer")
+
+local hiddenQueries = queryCount
+draw(0.05)
+assert(queryCount == hiddenQueries + 1 and starts == baseline, "monitoring continues while hidden")
+hideVar.value, nameVar.value = 0, "Other activity"
+draw(0.05)
+assert(arenaWindow.root.hidden, "unrelated activity bars do not show the overlay")
+assert(arenaWindow.root.alpha == 0, "hidden draw time must not advance the fade")
+nameVar.value, npcs = " <col=ffffff>VoRaGo</col> ", {}
+draw(0.05)
+assert(not arenaWindow.root.hidden, "a valid normalized Vorago bar shows immediately without an NPC")
+assert(arenaWindow.root.alpha == 0, "time spent hidden must not skip the reveal animation")
+draw(0.5)
+close(arenaWindow.root.alpha, 0.5)
+draw(6)
+assert(not arenaWindow.root.hidden, "an active bar keeps refreshing the buffer")
+assert(arenaWindow.root.alpha == 1, "long frames clamp the fade to full opacity")
+
+npcs = nil
+local lookupErrorCount = countMessages("Encounter monitoring error: NPC list unavailable: Vorago")
+draw(0.05)
+draw(0.05)
+assert(not arenaWindow.root.hidden, "NPC lookup errors do not override a confirmed boss bar")
+assert(countMessages("Encounter monitoring error: NPC list unavailable: Vorago") == lookupErrorCount + 1)
+defaults()
+currentVar.valueType = ValueType.STRING
+local visibilityErrorCount = countMessages(errorPrefix)
+draw(0.05)
+assert(not arenaWindow.root.hidden, "an invalid boss-bar read gets the same grace as bar loss")
+draw(5)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1)
+draw(1)
+assert(arenaWindow.root.hidden and countMessages(errorPrefix) == visibilityErrorCount + 1)
+defaults()
+draw(0.05)
+assert(not arenaWindow.root.hidden, "visibility recovers immediately after a valid read")
+bossRoot.visibleGlobal = false
+draw(0.05)
+draw(5)
+draw(1)
+assert(arenaWindow.root.hidden, "hidden activity containers are not active boss bars")
+
+defaults()
+draw(0.05)
+hideVar.value = 1
+draw(0.05)
+draw(4)
+assert(arenaWindow.root.alpha == 1)
+hideVar.value = 0
+draw(0.05)
+assert(arenaWindow.root.alpha == 1, "activity returning within the buffer does not restart the fade")
+hideVar.value = 1
+draw(0.05)
+draw(4.99)
+assert(not arenaWindow.root.hidden, "returning activity resets the full buffer")
+draw(0.01)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1)
+draw(0.5)
+close(arenaWindow.root.alpha, 0.5)
+hideVar.value = 0
+draw(0.05)
+close(arenaWindow.root.alpha, 0.5)
+draw(0.5)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1,
+    "a returning boss bar reverses fade-out without flashing or hiding")
+hideVar.value = 1
+draw(0.05)
+draw(5)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1)
+draw(2)
+assert(arenaWindow.root.hidden and arenaWindow.root.alpha == 0, "long frames clamp fade-out to zero opacity")
+
+defaults()
+observe(100)
+observe(0)
+assert(starts == baseline + 1, "monitoring must still detect the next encounter")
+hideVar.value, npcs = 1, {}
+draw(6)
+assert(not arenaWindow.root.hidden and lastTimerState.phase == "running",
+    "a running countdown stays visible beyond five seconds with neither Vorago nor his bar present")
+close(lastTimerState.elapsed, 6)
+setting("onlyInArena", false)
+setting("onlyInArena", true)
+assert(not arenaWindow.root.hidden)
+close(lastTimerState.elapsed, 6)
+draw(18)
+assert(not arenaWindow.root.hidden and lastTimerState.phase == "complete", "the full-bar hold remains visible")
+draw(1)
+assert(lastTimerState.phase == "idle" and not arenaWindow.root.hidden, "the buffer starts after the hold ends")
+draw(4.99)
+assert(not arenaWindow.root.hidden)
+draw(0.01)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1, "the countdown hold and buffer precede fade-out")
+draw(1)
+assert(arenaWindow.root.hidden and starts == baseline + 1, "fade out after the buffer without queued starts")
+
+-- A Scopulus-triggered countdown can make a hidden overlay visible without a boss bar.
+defaults()
+hideVar.value, scopNpcs = 1, { scopA }
+draw(0.05)
+assert(arenaWindow.root.hidden and detectorState.scop ~= nil)
+scopNpcs = {}
+draw(0.05)
+assert(not arenaWindow.root.hidden and starts == baseline + 2)
+assert(arenaWindow.root.alpha == 0 and lastTimerState.elapsed == 0)
+draw(0.5)
+close(arenaWindow.root.alpha, 0.5)
+close(lastTimerState.elapsed, 0.5)
+npcs = {}
+draw(23.5)
+assert(lastTimerState.phase == "complete" and not arenaWindow.root.hidden)
+assert(arenaWindow.root.alpha == 1, "fading must not pause or stretch a countdown")
+draw(6)
+assert(lastTimerState.phase == "idle" and not arenaWindow.root.hidden,
+    "a long frame ending the timer must not consume the new five-second buffer")
+draw(4.99)
+assert(not arenaWindow.root.hidden)
+draw(0.01)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1)
+draw(1)
+assert(arenaWindow.root.hidden)
+
+-- Starting a countdown during fade-out reverses it without resetting time or opacity.
+defaults()
+draw(0.05)
+draw(1)
+hideVar.value, scopNpcs = 1, { scopA }
+draw(0.05)
+draw(5)
+draw(0.5)
+close(arenaWindow.root.alpha, 0.5)
+scopNpcs = {}
+draw(0.05)
+assert(lastTimerState.phase == "running" and lastTimerState.elapsed == 0)
+close(arenaWindow.root.alpha, 0.5)
+draw(0.5)
+assert(not arenaWindow.root.hidden and arenaWindow.root.alpha == 1)
+close(lastTimerState.elapsed, 0.5)
+reenter()
+
+-- UI loss, reconnect, and shutdown discard the visibility grace as well as the timer.
+defaults()
+observe(100)
+observe(0)
+hideVar.value, npcs = 1, {}
+draw(0.05)
+assert(not timerWidget.root.hidden and lastTimerState.phase == "running")
+local unloadedWindow = timerWidget
+unloadedWindow.root:Destroy()
+draw(0.05)
+assert(unloadedWindow.destroyCalls == 1 and timerWidget ~= unloadedWindow)
+assert(timerWidget.root.hidden and lastTimerState.phase == "idle", "UI loss discards the timer and visibility grace")
+assert(timerWidget.root.alpha == 0, "a recreated hidden window must not inherit fade progress")
+defaults()
+draw(0.05)
+assert(timerWidget.root.alpha == 0)
+draw(0.5)
+close(timerWidget.root.alpha, 0.5)
+hideVar.value = 1
+draw(0.05)
+assert(not timerWidget.root.hidden)
+local hiddenWindow = timerWidget
+emit("GameStateChanged", { newState = GameState.RECONNECTING })
+assert(hiddenWindow.destroyCalls == 1)
+local queriesInReconnect = queryCount
+draw(1)
+assert(queryCount == queriesInReconnect)
+emit("GameStateChanged", { newState = GameState.GAME })
+draw(0.05)
+assert(timerWidget.root.hidden, "reconnect without a boss bar must not restore stale visibility grace")
+assert(timerWidget.root.alpha == 0, "reconnect discards an interrupted fade")
+setting("onlyInArena", false)
+reenter()
+baseline = starts
+
 -- All display settings can change mid-run without touching time or detector state.
 observe(100)
 observe(0)
@@ -686,28 +920,32 @@ baseline = starts
 local runningWindow, elapsedBeforeSettings = timerWidget, lastTimerState.elapsed
 local armedHP, armedScop = detectorState.positive, detectorState.scop
 openSettings()
-for _, debugMode in ipairs({ false, true }) do
-    for _, smooth in ipairs({ false, true }) do
-        for _, uniform in ipairs({ false, true }) do
-            setting("debugMode", debugMode)
-            setting("smoothCountdown", smooth)
-            setting("removeBarSections", uniform)
-            assert(starts == baseline and lastTimerState.elapsed == elapsedBeforeSettings)
-            assert(detectorState.positive == armedHP and detectorState.scop == armedScop)
-            assert(timerWidget == runningWindow and runningWindow.destroyCalls == 0)
-            assert(timerWidget.root.height == (debugMode and 166 or 88))
-            assert(debugLabel(74).hidden == not debugMode)
-            checkLayout(smooth and "22.7s" or "22.2s", false)
-            local bars = rectangles()
-            assert(#bars == 10)
-            for i = 1, 8 do assert(bars[i].hidden == uniform) end
-            for _, name in ipairs({ "pre-ult", "ult", "post-ult", "tc" }) do
-                assert(find("Text", name).hidden == uniform)
+for _, onlyInArena in ipairs({ false, true }) do
+    setting("onlyInArena", onlyInArena)
+    for _, debugMode in ipairs({ false, true }) do
+        for _, smooth in ipairs({ false, true }) do
+            for _, uniform in ipairs({ false, true }) do
+                setting("debugMode", debugMode)
+                setting("smoothCountdown", smooth)
+                setting("removeBarSections", uniform)
+                assert(starts == baseline and lastTimerState.elapsed == elapsedBeforeSettings)
+                assert(detectorState.positive == armedHP and detectorState.scop == armedScop)
+                assert(timerWidget == runningWindow and runningWindow.destroyCalls == 0)
+                assert(not timerWidget.root.hidden, "display styles do not hide a present encounter")
+                assert(timerWidget.root.height == (debugMode and 166 or 88))
+                assert(debugLabel(74).hidden == not debugMode)
+                checkLayout(smooth and "22.7s" or "22.2s", false)
+                local bars = rectangles()
+                assert(#bars == 10)
+                for i = 1, 8 do assert(bars[i].hidden == uniform) end
+                for _, name in ipairs({ "pre-ult", "ult", "post-ult", "tc" }) do
+                    assert(find("Text", name).hidden == uniform)
+                end
+                assert(bars[9].hidden == not uniform and bars[10].hidden == not uniform)
+                assert(bars[9].x == 88 and bars[9].width == 402)
+                assert(bars[10].x == 88 and bars[10].width == math.floor(402 * elapsedBeforeSettings / 24 + 0.5))
+                assert(bars[10].colour[1] == 0.83, "uniform mode keeps the existing accent")
             end
-            assert(bars[9].hidden == not uniform and bars[10].hidden == not uniform)
-            assert(bars[9].x == 88 and bars[9].width == 402)
-            assert(bars[10].x == 88 and bars[10].width == math.floor(402 * elapsedBeforeSettings / 24 + 0.5))
-            assert(bars[10].colour[1] == 0.83, "uniform mode keeps the existing accent")
         end
     end
 end
@@ -755,6 +993,10 @@ assert(debugLabel(44).hidden, "a successful save clears the preference error")
 setting("debugMode", true)
 setting("smoothCountdown", true)
 setting("removeBarSections", true)
+setting("onlyInArena", true)
+hideVar.value = 1
+draw(0.05)
+assert(not timerWidget.root.hidden, "the active timer stays visible before shutdown")
 PluginShutdown()
 for _, callbacks in pairs(subscriptions) do assert(next(callbacks) == nil) end
 for _, component in ipairs(components) do assert(not component.alive) end
@@ -763,11 +1005,16 @@ draw(0.05)
 assert(starts == baseline, "reload at zero must not restart")
 assert(timerWidget.root.height == 166 and not debugLabel(74).hidden)
 assert(not rectangles()[10].hidden, "ordinary preferences are restored")
+assert(timerWidget.root.hidden, "reload applies the saved setting without stale activity or visibility grace")
 openSettings()
 assert(settingsWidget.checkbox.selected.smoothCountdown and settingsWidget.checkbox.selected.removeBarSections)
+assert(settingsWidget.checkbox.selected.onlyInArena and not settingsWidget.root.hidden)
+setting("onlyInArena", false)
+assert(not timerWidget.root.hidden)
+setting("onlyInArena", true)
 PluginShutdown()
 
--- A release build still exposes the two ordinary settings, never Debug mode.
+-- A release build still exposes the ordinary settings, never Debug mode.
 local Build = require("src/build")
 Build.isDevBuild = false
 local previousDebugReads = preferenceReads.debugMode
@@ -776,10 +1023,13 @@ draw(0.05)
 assert(preferenceReads.debugMode == previousDebugReads, "release mode must ignore a saved true debug preference")
 assert(timerWidget.root.height == 88 and debugLabel(74).hidden and debugLabel(98).hidden and debugLabel(122).hidden)
 openSettings()
-assert(#settingsWidget.checkbox.choices == 2 and settingsWidget.checkbox.selected.debugMode == nil)
+assert(#settingsWidget.checkbox.choices == 3 and settingsWidget.checkbox.selected.debugMode == nil)
+assert(settingsWidget.checkbox.selected.onlyInArena and timerWidget.root.hidden)
 assert(not settingsWidget.checkbox:SetSelected("debugMode", true))
 setting("smoothCountdown", false)
 setting("removeBarSections", false)
+setting("onlyInArena", false)
+assert(not timerWidget.root.hidden)
 checkLayout()
 PluginShutdown()
 Build.isDevBuild = true
