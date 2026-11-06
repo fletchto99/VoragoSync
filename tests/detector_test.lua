@@ -72,45 +72,4 @@ end
 observe(reading(100, { name = "  VORAGO  " }))
 assert(observe(reading(0, { name = "vorago" })))
 
-local function encounter(count, changes)
-    local value = { valid = true, error = false, voragoPresent = true, playerAlive = true, identity = "boss-1", scopCount = count }
-    for key, change in pairs(changes or {}) do value[key] = change end
-    return value
-end
-local function scop(value, busy, gap)
-    return Detector.observeScop(state, value, busy or false, gap or Detector.pollInterval)
-end
-Detector.reset(state)
-assert(not scop(encounter(0)), "startup absence must not trigger")
-assert(not scop(encounter(2)))
-assert(state.scop ~= nil)
-assert(not scop(encounter(1)), "one remaining minion must not trigger")
-assert(scop(encounter(0)))
-assert(state.scop == nil)
-assert(not scop(encounter(0)), "continued absence must not trigger")
-scop(encounter(5))
-assert(scop(encounter(0)), "no hardcoded minion count")
-for _, loss in ipairs({
-    encounter(0, { valid = false }), encounter(0, { error = true }),
-    encounter(0, { voragoPresent = false }), encounter(0, { playerAlive = false }),
-    encounter(0, { identity = "different-boss" }), encounter("0"), encounter(-1),
-}) do
-    scop(encounter(2))
-    assert(not scop(loss))
-    assert(state.scop == nil)
-    assert(not scop(encounter(0)), "loss/error/death must discard the armed flag")
-end
-scop(encounter(2))
-assert(not scop(nil))
-assert(not scop(encounter(0)))
-scop(encounter(2))
-assert(not scop(encounter(0), true), "active/full-hold edges are consumed")
-assert(not scop(encounter(0)), "do not queue an active-run edge")
-scop(encounter(2))
-assert(not scop(encounter(0), false, Detector.maxObservationGap + 0.1))
-observe(reading(100))
-scop(encounter(2))
-Detector.reset(state)
-assert(state.scop == nil and state.positive == nil, "shared start reset clears both latches")
-assert(not scop(encounter(0)))
 print("detector_test.lua: passed")

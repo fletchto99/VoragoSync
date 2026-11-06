@@ -32,34 +32,32 @@ dependency. The plugin does not use UI text traversal, packed `ACTIVE_INFO`,
 secondary/shield values, target health, guessed phase IDs, or animation and
 movement heuristics. Static animation assets cannot establish a live jump.
 
-## Scopulus presence and lifecycle
+## Encounter guards and lifecycle
 
-The presence proxy was explicitly selected by the user, with the small-arena
-range assumption supplied as encounter context rather than measured proof.
-Each fresh observation follows this order:
+Scopulus uses the same activity HP edge as other phases: the user observed
+that the bar remains present and reflects Scopulus HP. No Scopulus NPC query
+or disappearance heuristic is used.
+
+Each fresh observation follows these guards before accepting an HP edge:
 
 1. Query `NPCList.ByName("Vorago")` and check valid identities. If none remains,
-   disarm before considering Scopulus disappearance.
+   disarm detection.
 2. Check typed own-player `var.VarPlayer.LIFEPOINTS.value` (observed ID `13655`).
-   Zero disarms before a death camera can make absence look like completion.
+   Zero disarms detection even if Vorago and the activity bar remain loaded.
    Missing or invalid LP is an explicit error, not assumed alive or zero.
-3. Query `*Scopul*` and count unique valid matching NPC identities. Any positive
-   count arms the latch; there is no required count or last-hit/target gate.
-4. A fresh change to zero triggers once if the same Vorago identity set remains,
-   the player is alive, and the timer is idle.
+3. A fresh positive-to-zero HP change triggers once if the same Vorago identity
+   set remains, the player is alive, and the timer is idle.
 
 "Present" means available as a valid entity, not camera pixels or line of sight.
-An NPC can remain through a death animation. All Scopuli leaving client range
-while Vorago remains loaded is indistinguishable from completion; no extra
-distance heuristic is imposed. Death and encounter loss are recognized only
-when the client updates the relevant signals.
+Death and encounter loss are recognized only when the client updates the
+relevant signals.
 
 Checks occur every 50ms on the next draw frame, after server delivery.
 Observations over 0.6s apart are not joined into an edge: a stalled/background
 client may miss a trigger instead of inventing a late one. Countdown progress
 uses `Event.Draw.timeDeltaSecs`, not frame counts.
 
-Every actual timer start centrally clears both latches. Active-run and
+Every actual timer start centrally clears HP history. Active-run and
 one-second full-hold edges are consumed, not restarted or queued. A fresh
 positive observation can arm a future run. Encounter identity changes,
 death/unreadable LP, failed observations, stale samples, and ordinary

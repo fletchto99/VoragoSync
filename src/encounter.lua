@@ -56,11 +56,6 @@ function Encounter.read()
     end
     result.playerAlive = true
 
-    -- Encounter/death checks precede interpreting an empty Scopulus query.
-    local scops
-    scops, status, detail = npcIDs("*Scopul*", function(name) return name:find("scopul", 1, true) ~= nil end)
-    if status then return failure(result, status, detail) end
-    result.scopCount = #scops
     result.valid, result.status = true, "Vorago present; player alive"
     return result
 end
