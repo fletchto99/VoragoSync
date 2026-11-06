@@ -146,6 +146,11 @@ and a branch up to date with `main`; reviewer approval is not required.
 These protections apply to administrators too, and force pushes and branch
 deletion are blocked.
 
+Dependabot checks npm dependencies and GitHub Actions weekly. Minor and patch
+version updates are grouped into one pull request per ecosystem; major updates
+get separate pull requests. See [the configuration](.github/dependabot.yml).
+The external PrettyUI plugin is managed manually, not by Dependabot.
+
 Tests cover guarded reads, HP/Scop triggers, lifecycle resets, all eight
 display-setting combinations, mid-run toggles, bar geometry, persistence and
 error reporting, dev/non-dev settings, dependency failures, and wrapper
