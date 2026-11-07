@@ -14,6 +14,9 @@ import {
 
 const sourceFiles = [
   "app.lua",
+  "overlay.lua",
+  "visibility.lua",
+  "ui_helpers.lua",
   "timer.lua",
   "health_probe.lua",
   "detector.lua",
@@ -48,6 +51,7 @@ for (const file of [
   "health_probe_test.lua",
   "detector_test.lua",
   "encounter_test.lua",
+  "visibility_test.lua",
   "main_test.lua",
 ]) {
   test(`native Lua: ${file}`, async (t) => {
