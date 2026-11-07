@@ -56,20 +56,31 @@ plugin with `poff voragosync`.
 Monitoring starts automatically. Open **Plugin Hub > Manage > VoragoSync >
 Settings** using the plugin's Settings icon.
 
-| Setting                   | Default | Effect                                                                                                   |
-| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| Smooth countdown          | Off     | Use 0.1s steps throughout, rather than 0.6s long sections and 0.1s ult/tc.                               |
-| Remove bar sections       | Off     | Show a single gapless gold bar without segment labels; keep the countdown.                               |
-| Only show in Vorago arena | Off     | Show with positive Vorago HP or an active countdown; use a 5s hide buffer and 10s reappearance cooldown. |
-| Debug mode                | Off     | Dev builds only: show Activity, Current HP, and Armed state below the bar.                               |
+| Setting                 | Default | Effect                                                                                                   |
+| ----------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| Smooth countdown        | Off     | Use 0.1s steps throughout, rather than 0.6s long sections and 0.1s ult/tc.                               |
+| Single-bar display      | Off     | Show a single gapless gold bar without segment labels; keep the countdown.                               |
+| Auto-hide when inactive | Off     | Show with positive Vorago HP or an active countdown; use a 5s hide buffer and 10s reappearance cooldown. |
+| Debug mode              | Off     | Dev builds only: show Activity, Current HP, and Armed state below the bar.                               |
 
 All settings persist and apply mid-countdown without resetting elapsed time.
 The uniform bar follows raw elapsed time independently of countdown snapping.
 Both bar styles hold full for one second at completion, then clear.
 Operational errors are always logged, but appear in the overlay only with
-Debug mode on. Settings-save failures also show a message in Settings.
+Debug mode on. Settings always shows a live monitoring status, including in
+release builds: waiting for Vorago/activity, monitoring HP, countdown running
+or complete, and monitoring unavailable with a reason. It uses the existing
+sample rather than making additional game queries. A monitoring failure takes
+priority over countdown status without cancelling the countdown.
+Settings-save failures also show a message in Settings and remain until the
+affected preference is successfully saved or all settings are reset; saving an
+unrelated preference does not dismiss them.
 
-**Only show in Vorago arena** shows the overlay while a valid, active Vorago
+The clearer labels preserve existing saved preferences: **Single-bar display**
+was previously **Remove bar sections**, and **Auto-hide when inactive** was
+**Only show in Vorago arena**. No migration or behavior change is required.
+
+**Auto-hide when inactive** shows the overlay while a valid, active Vorago
 boss bar has positive HP or a countdown (including its full-bar hold) is active.
 Zero-HP bar readings cannot reactivate an idle overlay after the fight.
 Once neither is active, it stays visible for **five more seconds** before
@@ -103,9 +114,13 @@ While unlocked, space is reserved above the window to keep the drag bar
 accessible at the top of the screen; this does not overwrite its saved layout.
 
 Lock RuneScape's interface again to hide the handle and disable resizing,
-restoring click-through and normal arena visibility/fades. **Reset to defaults**
-in the plugin's Settings resets all display preferences, size, and position.
-Moving, resizing, and resetting settings never reset a countdown or change
+restoring click-through and normal activity-based visibility/fades. **Reset layout**
+in Settings resets only position and size, preserving display preferences.
+**Reset all settings** resets display preferences, size, and position together.
+Both cancel an unfinished drag/resize without saving its intermediate geometry.
+If persistence fails, the reset still applies for the current session and
+Settings reports that it could not be saved.
+Moving, resizing, and either reset never reset a countdown or change
 RuneScape's global interface-lock state.
 The default window is 500 by 48 interface units and can shrink to 340 units wide;
 its minimum height fits the visible rows. Saved sizes are preserved, so resize
@@ -150,12 +165,15 @@ teardown still need broader in-game verification.
 main.lua            Native plugin entrypoint (startup and shutdown hook)
 plugin.json         Native plugin manifest
 src/
-  app.lua           Application lifecycle, monitoring, settings, and UI
+  app.lua           Application lifecycle, monitoring, settings, and persistence
   build.lua         Explicit dev/release build flag
   detector.lua      Guarded HP transition detection
   encounter.lua     Vorago presence and player life-point reads
   health_probe.lua  Activity HP reads and validation
+  overlay.lua       HUD rendering, placement/input, and widget ownership
   timer.lua         Countdown state and display math
+  ui_helpers.lua    Shared PrettyUI dependency and content-host/ownership guards
+  visibility.lua    Grace periods, cooldowns, and fades without native UI calls
 tests/              Lua behavioral suites and TypeScript harness
 scripts/            Release ZIP packaging
 docs/               Detection and API compatibility notes
@@ -197,11 +215,12 @@ The external PrettyUI plugin is managed manually, not by Dependabot.
 
 Tests cover guarded reads, HP triggers, lifecycle resets, display-setting
 combinations, mid-run toggles, bar geometry, persistence and
-error reporting, arena visibility, dev/non-dev settings, dependency failures, and wrapper
+error reporting, activity-based visibility, dev/non-dev Settings diagnostics, dependency failures, and wrapper
 cleanup. PrettyUI tests use a 1.2.0 contract double, not the game's renderer.
 Placement coverage includes native interface-lock changes and unavailable
 signals, click-through, drag/resize capture, all eight resize directions, saved
-geometry, responsive bars, reset behavior, viewport clamping, and storage failures.
+geometry, responsive bars, independent layout/full resets, viewport clamping, and storage failures.
+Visibility timing also has a standalone suite, separate from the native UI contract double.
 Default timing is compared at thousands of boundaries against a small,
 attributed [test-only reference](https://github.com/fletchto99/VoragoSync/blob/main/tests/reference/timer.ts).
 

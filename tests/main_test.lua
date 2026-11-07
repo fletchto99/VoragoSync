@@ -8,6 +8,7 @@ local storedPreferences, preferenceReads, writes = {}, {}, {}
 local saveOK = true
 local storedPosition, positionSaveOK, positionWrites = nil, true, {}
 local clearOK, clearCalls = true, 0
+local deleteOK, deleteCalls = true, 0
 PersistentDB = {
     GetBool = function(_, key)
         assert(key == "debugMode" or key == "smoothCountdown" or key == "removeBarSections" or key == "onlyInArena")
@@ -47,6 +48,16 @@ PersistentDB = {
             storedPosition = nil
         end
         return clearOK
+    end,
+    CheckExists = function(_, key)
+        assert(key == "overlayPosition")
+        return storedPosition ~= nil
+    end,
+    Delete = function(_, key)
+        assert(key == "overlayPosition", "layout reset must not delete display preferences")
+        deleteCalls = deleteCalls + 1
+        if deleteOK then storedPosition = nil end
+        return deleteOK
     end,
 }
 local bossNPC = { isValid = true, displayName = "Vorago", uid = 1, configID = 1, isMultiNPC = false }
@@ -234,6 +245,9 @@ local forceContentCategory = nil
 local forceMissingFrame = nil
 local forceMissingScrollClickthrough = false
 local Widget = {}
+local function growSettingsContent(widget)
+    if widget.kind == "SimpleView" then widget.scroll:SetContentHeight(widget.nextY) end
+end
 function Widget:AddText(value)
     if self.kind == "Panel" then
         local dock = Widget.AddText({ content = self.dock.content, nextY = self.nextY }, value)
@@ -259,6 +273,7 @@ function Widget:AddText(value)
     label.alignVertical = options.alignVertical or ui.AlignMode.CENTRE
     label.prettyOptions = options
     if options.y == nil then self.nextY = self.nextY + height + 4 end
+    growSettingsContent(self)
     return label
 end
 function Widget:AddTitle(value)
@@ -278,6 +293,7 @@ function Widget:AddCheckboxButton(choices, options)
     end
     self.checkbox = control
     self.nextY = self.nextY + #choices * 28
+    growSettingsContent(self)
     return control
 end
 function Widget:AddSimpleButton(label, action, options)
@@ -287,6 +303,7 @@ function Widget:AddSimpleButton(label, action, options)
     button:SetSize(options.width, 28)
     button.hooks[ui.Hook.ONCLICK] = function() action(button) end
     self.nextY = self.nextY + 32
+    growSettingsContent(self)
     self.resetButton = button
     return button
 end
@@ -587,6 +604,8 @@ for _, callbacks in pairs(subscriptions) do assert(callbacks.VoragoSync ~= nil) 
 assert(hasMessage("[VoragoSync] PrettyUI 1.2.0 loaded."))
 draw(0.02)
 assert(hasMessage("Waiting for the in-game"))
+openSettings()
+find("Text", "Status: Waiting for in-game UI")
 rootAvailable = true
 draw(0.02)
 checkLayout()
@@ -608,8 +627,20 @@ assert(overlayOpacity() == 1, "the fade reaches full opacity after one second")
 for _ = 1, 20 do draw(0.05) end
 assert(overlayOpacity() == 1, "continuous visibility must not restart the fade")
 assert(starts == 0, "enabling at zero must not start")
+local queriesBeforeSettings, activityBeforeSettings = queryCount, activityQueries
 openSettings()
+assert(queryCount == queriesBeforeSettings and activityQueries == activityBeforeSettings,
+    "Settings diagnostics must reuse the cached monitoring sample")
+find("Text", "Status: Monitoring: waiting for positive Vorago HP")
 assert(#settingsWidget.checkbox.choices == 4)
+assert(settingsWidget.checkbox.choices[2].text == "Single-bar display")
+assert(settingsWidget.checkbox.choices[3].text == "Auto-hide when inactive")
+find("Button", "Reset layout")
+find("Button", "Reset all settings")
+find("Text", "Auto-hide follows boss activity, not location.\n5s hide buffer; 10s reappearance cooldown.")
+assert(settingsWidget.content.height > settingsWidget.root.height,
+    "the added Settings rows must live in scrollable flow content")
+assert(settingsWidget.resetButton.y + settingsWidget.resetButton.height <= settingsWidget.content.height)
 assert(not settingsWidget.checkbox.selected.debugMode)
 assert(not settingsWidget.checkbox.selected.onlyInArena and preferenceReads.onlyInArena == 1)
 assert(settingsWidget.checkbox.selected.lockLocation == nil and preferenceReads.lockLocation == nil)
@@ -629,7 +660,9 @@ assert(not debugLabel(70).hidden, "debug readouts have no 45-second timeout")
 
 observe(250000)
 find("Text", "Armed: Vorago HP")
+find("Text", "Status: Monitoring: Vorago HP")
 observe(0)
+find("Text", "Status: Countdown running")
 assert(starts == 1 and lastTimerState.phase == "running")
 assert(hasMessage("Vorago positive HP -> 0: started 24-second countdown."))
 close(lastTimerState.elapsed, 0)
@@ -758,6 +791,8 @@ setting("debugMode", false)
 for _ = 1, 20 do draw(0.05) end
 assert(countMessages(errorPrefix) == errorCount + 1, "persistent API errors should log once")
 assert(find("Text", "Monitor: Type error: current value").hidden, "monitoring errors stay off the compact overlay")
+assert(not find("Text", "Status: Monitoring unavailable: Type error: current value").hidden,
+    "monitoring failures are visible in Settings without enabling Debug mode")
 assert(debugLabel(70).hidden)
 assert(timerWidget.root.height == 48, "errors must not add empty space with debug disabled")
 checkContentFit()
@@ -1195,7 +1230,14 @@ assert(debugLabel(40).hidden and timerWidget.root.height == 48 and lastTimerStat
 checkContentFit()
 saveOK = true
 setting("smoothCountdown", false)
-assert(debugLabel(40).hidden, "a successful save clears the preference error")
+assert(not find("Text", "The change applies for this session, but could not be saved.").hidden,
+    "saving a different preference must not clear an unsaved change")
+openSettings()
+assert(not find("Text", "The change applies for this session, but could not be saved.").hidden,
+    "remounting Settings preserves the specific save warning")
+setting("debugMode", true)
+assert(debugLabel(40).hidden, "saving the affected preference clears its error")
+setting("debugMode", false)
 assert(timerWidget.root.height == 48 and lastTimerState.elapsed == elapsedBeforeRemount)
 checkContentFit()
 
@@ -1241,6 +1283,37 @@ setting("removeBarSections", false)
 setting("onlyInArena", false)
 assert(not timerWidget.root.hidden)
 checkLayout()
+defaults()
+npcs = {}
+draw(0.05)
+find("Text", "Status: Waiting for Vorago")
+npcs = false
+draw(0.05)
+find("Text", "Status: Monitoring unavailable: NPC list unavailable: Vorago")
+defaults()
+lifeVar.value = 0
+draw(0.05)
+find("Text", "Status: Waiting: Own life points zero - detection disarmed")
+lifeVar.value = 10000
+observe(100)
+find("Text", "Status: Monitoring: Vorago HP")
+hideVar.value = 1
+draw(0.05)
+find("Text", "Status: Waiting for Vorago activity")
+hideVar.value = 0
+observe(100)
+observe(0)
+find("Text", "Status: Countdown running")
+currentVar.valueType = ValueType.STRING
+draw(0.05)
+find("Text", "Status: Monitoring unavailable: Type error: current value")
+assert(debugLabel(40).hidden and timerWidget.root.height == 48,
+    "release diagnostics do not add debug rows to the HUD")
+currentVar.valueType = ValueType.INTEGER
+draw(0.05)
+find("Text", "Status: Countdown running")
+draw(24)
+find("Text", "Status: Countdown complete")
 PluginShutdown()
 Build.isDevBuild = true
 
@@ -1734,6 +1807,10 @@ do
         settingsWidget.resetButton.hooks[ui.Hook.ONCLICK]()
         draw(0)
     end
+    local function clickResetLayout()
+        find("Button", "Reset layout").hooks[ui.Hook.ONCLICK]()
+        draw(0)
+    end
 
     for _, case in ipairs(cases) do
         defaults()
@@ -1852,6 +1929,65 @@ do
     draw(0.5)
     local elapsed, startCount, boolWrites = lastTimerState.elapsed, starts, #writes
     local priorClears = clearCalls
+    local priorDeletes = deleteCalls
+    clickResetLayout()
+    assert(clearCalls == priorClears and deleteCalls == priorDeletes + 1 and storedPosition == nil)
+    assert(storedPreferences.smoothCountdown and storedPreferences.removeBarSections and storedPreferences.debugMode)
+    assert(settingsWidget.checkbox.selected.smoothCountdown and settingsWidget.checkbox.selected.removeBarSections
+        and settingsWidget.checkbox.selected.debugMode, "layout reset preserves display choices")
+    assert(#writes == boolWrites and lockVar.value == 0)
+    assert(timerWidget.root.x == 710 and timerWidget.root.y == 378)
+    assert(timerWidget.root.width == 500 and timerWidget.root.height == 124)
+    assert(starts == startCount and lastTimerState.elapsed == elapsed and lastTimerState.phase == "running")
+    clickResetLayout()
+    assert(deleteCalls == priorDeletes + 1, "resetting an absent layout is already persisted, not a delete failure")
+    PluginShutdown()
+    dofile("main.lua")
+    draw(0.05)
+    openSettings()
+    assert(timerWidget.root.width == 500 and timerWidget.root.height == 124)
+    assert(settingsWidget.checkbox.selected.smoothCountdown and settingsWidget.checkbox.selected.removeBarSections)
+    observe(100)
+    observe(0)
+    draw(0.5)
+    elapsed, startCount = lastTimerState.elapsed, starts
+    local pendingResizeWrites = #positionWrites
+    target = resize("se", 150, 60)
+    clickResetLayout()
+    target.hooks[ui.Hook.ONRELEASE](target)
+    assert(#positionWrites == pendingResizeWrites and timerWidget.root.width == 500 and timerWidget.root.height == 124,
+        "layout reset cancels a gesture without persisting intermediate dimensions")
+    assert(lastTimerState.elapsed == elapsed and starts == startCount)
+    target = resize("e", 80, 0)
+    target.hooks[ui.Hook.ONRELEASE](target)
+    assert(storedPosition.width == 580)
+    deleteOK = false
+    clickResetLayout()
+    assert(storedPosition.width == 580 and timerWidget.root.width == 500)
+    assert(not find("Text", "The default layout applies for this session, but could not be saved.").hidden)
+    assert(storedPreferences.smoothCountdown and lastTimerState.elapsed == elapsed)
+    setting("smoothCountdown", false)
+    assert(not find("Text", "The default layout applies for this session, but could not be saved.").hidden,
+        "saving a preference cannot clear a failed layout reset")
+    setting("smoothCountdown", true)
+    saveOK = false
+    setting("smoothCountdown", false)
+    saveOK = true
+    setting("removeBarSections", false)
+    assert(not find("Text", "The default layout applies for this session, but could not be saved.").hidden)
+    deleteOK = true
+    clickResetLayout()
+    assert(storedPosition == nil)
+    assert(not find("Text", "The change applies for this session, but could not be saved.").hidden,
+        "clearing a layout error must reveal, not discard, an outstanding preference error")
+    setting("smoothCountdown", true)
+    assert(debugLabel(40).hidden)
+    local oldLayoutReset = find("Button", "Reset layout").hooks[ui.Hook.ONCLICK]
+    openSettings()
+    priorDeletes = deleteCalls
+    oldLayoutReset()
+    assert(deleteCalls == priorDeletes, "stale layout reset callbacks must do nothing")
+    boolWrites = #writes
     clickReset()
     assert(clearCalls == priorClears + 1 and next(storedPreferences) == nil and storedPosition == nil)
     assert(#writes == boolWrites, "reset updates checkbox UI without repeated preference callbacks")

@@ -31,12 +31,15 @@ Reload an updated copy with `prl voragosync`, or disable it with `poff voragosyn
 ## Usage
 
 Monitoring starts automatically. Open **Plugin Hub > Manage > VoragoSync >
-Settings** to configure the display or reset settings and layout.
+Settings** to configure the display, see monitoring status, reset only the
+layout, or reset all settings.
 
-**Only show in Vorago arena** is off by default. When enabled, positive Vorago
+**Auto-hide when inactive** is off by default. When enabled, positive Vorago
 HP or an active countdown keeps the overlay visible, followed by a five-second
 buffer and one-second fade-out. A ten-second cooldown prevents immediate
 reappearance. This uses boss activity, not arena coordinates.
+**Single-bar display** replaces the segmented bar with one gapless bar.
+Existing saved preferences keep their values under the clearer labels.
 
 Unlock RuneScape's interface to reveal the brown drag handle and resize from any
 edge or corner. Lock it again to restore click-through and normal visibility.

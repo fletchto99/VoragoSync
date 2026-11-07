@@ -1,5 +1,19 @@
 # Detection and compatibility
 
+## Application boundaries
+
+`app.lua` coordinates the draw/game/settings events, shared monitoring samples,
+and persistence. `overlay.lua` owns HUD construction, rendering, native lock
+reads, drag/resize geometry, and teardown; it reports errors and completed
+layout gestures through callbacks rather than writing preferences directly.
+`visibility.lua` owns the grace period, cooldown, fade direction/opacity, and
+visibility history without native UI calls. The app advances its cooldown even
+outside active game state and supplies activity/lock inputs on rendered frames.
+Unmounting clears its visual/activity history and uses the overlay's last
+surface lock state to decide whether to start a cooldown.
+`ui_helpers.lua` shares dependency validation, content-host checks, and live-root
+ownership checks between the HUD and Settings.
+
 ## Activity HP
 
 The activity reader uses the named `.value` fields below, checking domain,
@@ -66,7 +80,8 @@ Loading/logout/reconnect, plugin UI loss, and shutdown still cancel.
 Settings remounts and display changes do not reset timing or detection.
 Repeated genuine monitoring errors are reported without logging on every poll.
 
-The opt-in `onlyInArena` display preference uses the existing 50ms activity
+The opt-in `onlyInArena` display preference, labelled **Auto-hide when inactive**,
+uses the existing 50ms activity
 sample and timer state, without extra queries. A valid, active bar named
 Vorago (case-insensitive after normalizing markup/whitespace) with positive HP,
 or a non-idle timer, keeps the overlay visible. Late/stale zero-HP readings do
@@ -94,7 +109,11 @@ automatic visibility. Native interface editing and always-visible mode bypass
 it, and restarting the plugin clears this non-persistent history.
 
 Hiding affects only the overlay root, not monitoring or widget ownership.
-Settings remains accessible and monitoring errors continue to be logged.
+Settings remains accessible and shows monitoring health from the same cached
+samples in both dev and release builds. Waiting for the boss/activity and a
+dead player are distinct from API failures; a genuine failure shows
+`Monitoring unavailable` with its reason, even during an active countdown.
+Monitoring errors continue to be logged.
 Overlay error messages are shown only in Debug mode.
 This is not a coordinate-based arena boundary check: teleporting out during
 a countdown can leave the overlay visible through the timer, hold, buffer, and fade-out.
@@ -187,10 +206,12 @@ stay unchanged.
 Saved geometry is clamped for the viewport and visible content without replacing
 preferred values on every screen resize. Failed saves are logged and reported
 in an open Settings view; the new layout still applies for the current session.
-The Settings reset button clears the plugin's PersistentDB in one operation,
-restores local defaults, cancels an unfinished layout gesture, and refreshes
-checkboxes without triggering their change callbacks. A failed clear is reported
-while defaults still apply for that session. Neither reset nor layout gestures
+**Reset layout** clears only `overlayPosition` using `CheckExists` and `Delete`;
+an already-absent record is already at the default and needs no write.
+**Reset all settings** clears the plugin's PersistentDB in one operation,
+restores local defaults, and refreshes checkboxes without triggering their
+change callbacks. Both cancel an unfinished layout gesture. A failed delete or
+clear is reported while defaults still apply for that session. Neither reset nor layout gestures
 reset timer/detector state or write RuneScape's native interface lock.
 
 ## PrettyUI 1.2.0
@@ -236,7 +257,13 @@ on the installed 1.2.0 panel's dock surface; missing handles fail explicitly.
 Debug readouts share the regular monitoring sample, with no additional polls
 or timed capture. Missing values remain `--`. If a preference save fails, the
 current-session change still applies and Settings shows that it was not saved,
-even with Debug mode off.
+even with Debug mode off. Notices are keyed by the affected preference or
+operation, not by their prose. Layout and full-reset failures have priority,
+but clearing one reveals any remaining preference failure. Saving a different
+preference never clears the failed key's notice. Reopening Settings preserves
+the current warnings and refreshes monitoring status without extra polls.
+The settings labels retain the `removeBarSections` and `onlyInArena` keys, so
+existing display preferences remain compatible.
 The explicit build flag is independent of client paths, worlds, or Import save.
 
 ## API references
