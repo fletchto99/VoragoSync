@@ -24,7 +24,7 @@
   "devDependencies": {
     "@types/node": "26.6.6",
     "fflate": "0.8.3",
-    "prettier": "3.9.10",
+    "prettier": "3.10.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "wasmoon": "1.16.0"
